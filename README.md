@@ -6,7 +6,7 @@ Built for church interpreters who need to find and display verses in real time d
 
 ![KJV demo showing John 3:16](docs/screenshot.png)
 
-**Live demo:** _coming soon (GitHub Pages)_
+**Live demo:** https://rkim9125.github.io/LiveVerse/
 
 ## Features
 
@@ -19,8 +19,8 @@ Built for church interpreters who need to find and display verses in real time d
 ## Quick start
 
 ```sh
-git clone <this repo>
-cd <repo>
+git clone https://github.com/rkim9125/LiveVerse.git
+cd LiveVerse
 git config core.hooksPath .githooks   # enable the copyright-safety pre-commit hook
 open index.html
 ```

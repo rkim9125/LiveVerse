@@ -29,3 +29,6 @@ __pycache__/
 # Internal notes
 PLAN.md
 validation_report.md
+
+# Node
+node_modules/
