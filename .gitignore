@@ -4,11 +4,12 @@ data/*
 !data/sample/
 !data/sample/**
 
-# Source / working files in the project root
-*.json
-*.json.bak
+# Source / working files in the project root only
+/*.json
+/*.txt
+
+# Backups and copyrighted source names, at any depth (defense in depth)
 *.bak
-*.txt
 NKJV*
 nkjv*
 ko_ko*
@@ -16,15 +17,24 @@ bible_data*
 b_25.html
 
 # Allowed exceptions
-!requirements.txt
-!package.json
+!/requirements.txt
+!/package.json
 
 # Local settings / OS
 .claude/settings.local.json
 .DS_Store
 
-# Python
+# Python / tooling
 __pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Realtime local-only data
+realtime/backend/logs/
+realtime/backend/eval/corpus/
 
 # Internal notes
 PLAN.md
