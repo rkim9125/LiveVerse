@@ -76,4 +76,4 @@ Each line in `tests/fixtures/parser_cases.jsonl` is one case:
 
 - **Spoken short forms:** single and two syllable book abbreviations (요, 시, 요일, 고전) are off in spoken mode, because they collide with ordinary words.
 - **Possible false positive:** a bare chapter such as "누가 3장을" is ignored without context. With a displayed verse, though, it resolves to that book's chapter 3. Stage 4 shows such candidates with a lower confidence, and the interpreter decides.
-- **Korean versification:** the Korean versification differences from the KJV are not handled yet.
+- **Versification:** the detector checks chapter and verse numbers against KJV counts. In the local Korean (개역한글) and NKJV data used with this project, every chapter has the same number of verses as the KJV (1,189 chapters checked). A different translation with other verse divisions would need its own counts.

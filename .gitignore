@@ -32,9 +32,16 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Realtime local-only data
+# Realtime local-only data (the evaluation corpus lives outside the repo, in ~/liveverse-corpus)
 realtime/backend/logs/
 realtime/backend/eval/corpus/
+
+# Audio and video: sermon recordings must never be committed
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.webm
 
 # Internal notes
 PLAN.md
