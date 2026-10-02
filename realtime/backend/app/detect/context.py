@@ -74,12 +74,17 @@ def _resolve_one(raw: RawMention, base: Reference, conf: float) -> tuple[Referen
 def resolve(raws: list[RawMention], displayed: Reference | None) -> list[Resolved]:
     out: list[Resolved] = []
     segment: Reference | None = None
+    blocked = False  # an unconfirmed book name was said: no context for the rest
     for raw in raws:
+        if raw.op == "block":
+            segment, blocked = None, True
+            continue
         if raw.op == "abs":
+            blocked = False
             out.append((raw, raw.ref, "absolute", raw.confidence))
             segment = raw.ref
             continue
-        base = segment or displayed
+        base = segment or (None if blocked else displayed)
         if base is None:
             continue  # no context: nothing to resolve against
         resolved = _resolve_one(raw, base, CONF_SEGMENT if segment else CONF_DISPLAYED)

@@ -135,3 +135,8 @@
 {"id": "ko-inword-002", "lang": "ko", "mode": "spoken", "input": "이제 돌아가 볼까요 4장", "context": null, "expect": [], "tags": ["in-word", "negative"]}
 {"id": "ko-inword-003", "lang": "ko", "mode": "spoken", "input": "그렇게 있어요 나오미가 말하기를", "context": null, "expect": [], "tags": ["in-word", "negative"]}
 {"id": "ko-inword-004", "lang": "ko", "mode": "spoken", "input": "함께 살아가는 3장의 이야기", "context": null, "expect": [], "tags": ["in-word", "negative"]}
+{"id": "ko-unconfirmed-001", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절", "context": "is 40:27", "expect": [], "tags": ["unconfirmed-name", "negative"]}
+{"id": "ko-unconfirmed-002", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절, 그리고 8절", "context": "is 40:27", "expect": [], "tags": ["unconfirmed-name", "negative"]}
+{"id": "ko-unconfirmed-003", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절 그리고 로마서 8장 28절", "context": "is 40:27", "expect": [{"ref": "rm 8:28"}], "tags": ["unconfirmed-name"]}
+{"id": "ko-unconfirmed-004", "lang": "ko", "mode": "spoken", "input": "라오디기아 3장 15절", "context": "re 3:8", "expect": [{"ref": "re 3:15"}], "tags": ["unconfirmed-name", "not-book-like"]}
+{"id": "ko-unconfirmed-005", "lang": "ko", "mode": "spoken", "input": "교회의 모습은 3장 15절입니다", "context": "re 3:8", "expect": [{"ref": "re 3:15"}], "tags": ["unconfirmed-name", "not-book-like"]}

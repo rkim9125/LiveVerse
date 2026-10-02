@@ -14,7 +14,7 @@ from functools import cache
 
 from app.core.models import Mode, Reference
 from app.detect import versification
-from app.detect.books import book_regex, fuzzy_lookup, lookup
+from app.detect.books import book_regex, fuzzy_lookup, looks_like_book, lookup
 from app.detect.normalize import Normalized
 
 # Confidence for absolute references. Relative ones are scored in context.py.
@@ -77,6 +77,8 @@ class RawMention:
 
     op is "abs" for an absolute reference (ref is set), or one of "verse",
     "chapter", "next_verse", "prev_verse", "next_chapter", "last_verse".
+    "block" marks a chapter said after an unconfirmed book name: it is not
+    resolved, and relative mentions after it in the segment are dropped.
     start and end are offsets into the normalized text.
     """
 
@@ -316,6 +318,14 @@ def parse(
                 if book and reader.adjacent(i, j):
                     spec = reader.chapter_spec(j)
                     if spec and emit_abs(book, spec, t.start, spec.next_index, fuzzy_from=t.text):
+                        i, pending = spec.next_index, None
+                        continue
+                elif looks_like_book(t.text) and reader.adjacent(i, j):
+                    # Probably a misheard book we could not confirm. Do not let the
+                    # chapter fall back to the previous book's context.
+                    spec = reader.chapter_spec(j)
+                    if spec:
+                        out.append(RawMention("block", t.start, toks[spec.next_index - 1].end))
                         i, pending = spec.next_index, None
                         continue
             i += 1
