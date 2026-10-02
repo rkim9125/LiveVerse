@@ -37,6 +37,8 @@ def detect(
     result = parse(norm, mode, known)
     mentions: list[Mention] = []
     for raw, ref, kind, conf in resolve(result.mentions, context):
+        if _repeats_displayed_chapter(ref, context):
+            continue
         if result.trigger:
             conf = min(1.0, conf + TRIGGER_BONUS)
         if mentions and mentions[-1].ref == ref:
@@ -53,6 +55,17 @@ def detect(
             )
         )
     return _mark_superseded(mentions)
+
+
+def _repeats_displayed_chapter(ref: Reference, displayed: Reference | None) -> bool:
+    """A chapter said again while a verse of it is on the display ("이사야 40장"
+    after 40:27 is shown). The display already shows that chapter."""
+    return (
+        displayed is not None
+        and displayed.verse_start is not None
+        and ref.verse_start is None
+        and (ref.book, ref.chapter) == (displayed.book, displayed.chapter)
+    )
 
 
 def _mark_superseded(mentions: list[Mention]) -> list[Mention]:

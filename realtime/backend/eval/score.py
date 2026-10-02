@@ -33,6 +33,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.detect.announce import TimedSegment, dimmed_chapters  # noqa: E402
 from app.detect.pipeline import detect  # noqa: E402
 
 SLACK_S = 1.0  # seconds of tolerance when matching a detection to a label window
@@ -59,6 +60,7 @@ def _mention_time(words: list[dict], span: tuple[int, int]) -> tuple[float, floa
 
 
 SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
+DIMMED: Counter[str] = Counter()  # chapter candidates said in passing, per file
 
 
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
@@ -68,22 +70,44 @@ def predictions(transcript: Path) -> list[tuple[float, float, str]]:
     detection to the wrong label window. Word timestamps place it exactly.
     """
     segments = json.loads(transcript.read_text(encoding="utf-8"))["segments"]
+    # Dimmed chapters depend on what is said after them, and the context depends
+    # on which candidates were shown. Two passes settle both.
+    dimmed: set[tuple[int, int]] = set()
+    for _ in range(2):
+        timeline = _run(segments, dimmed)
+        dimmed = dimmed_chapters(timeline)
+    timeline = _run(segments, dimmed)
+    dimmed = dimmed_chapters(timeline)
+    SUPERSEDED[str(transcript)] = sum(m.superseded for s in timeline for m, _, _ in s.mentions)
+    DIMMED[str(transcript)] = len(dimmed)
+    return [
+        (start, end, str(m.ref))
+        for i, s in enumerate(timeline)
+        for j, (m, start, end) in enumerate(s.mentions)
+        if (i, j) not in dimmed
+    ]
+
+
+def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegment]:
+    """detect() over the transcript. The context is the last shown candidate, as if
+    the interpreter clicked every one that was not dimmed."""
     context = None
-    known_books: set[str] = set()  # books "shown" so far, as if the interpreter clicked each
-    out = []
-    for seg in segments:
+    known_books: set[str] = set()
+    timeline = []
+    for i, seg in enumerate(segments):
         words = seg.get("words") or []
         text = "".join(w["word"] for w in words) if words else seg["text"]
         mentions = detect(text, context=context, known_books=known_books)
-        known_books.update(m.ref.book for m in mentions)
-        SUPERSEDED[str(transcript)] += sum(m.superseded for m in mentions)
-        for m in mentions:
+        timed = TimedSegment(seg["start"], seg["end"], text)
+        for j, m in enumerate(mentions):
             when = _mention_time(words, m.span) if words else None
             start, end = when or (seg["start"], seg["end"])
-            out.append((start, end, str(m.ref)))
-        if mentions:
-            context = mentions[-1].ref
-    return out
+            timed.mentions.append((m, start, end))
+            if (i, j) not in dimmed:
+                known_books.add(m.ref.book)
+                context = m.ref
+        timeline.append(timed)
+    return timeline
 
 
 def score_sermon(sermon: str, transcript_name: str) -> dict:
@@ -139,6 +163,7 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         "unlabeled_fp": unlabeled_fp,
         "dedup_hits": dedup_hits,
         "superseded": SUPERSEDED[str(d / transcript_name)],
+        "dimmed": DIMMED[str(d / transcript_name)],
         "fp_by_type": dict(fp_types),
         "fn_by_type": dict(fn_types),
     }
@@ -199,6 +224,7 @@ def main() -> None:
         "unlabeled_fp",
         "dedup_hits",
         "superseded",
+        "dimmed",
     )
     total = {k: sum(s[k] for s in per) for k in keys}
     for s in per + [total]:
@@ -244,6 +270,7 @@ def markdown(report: dict) -> str:
         f"- Dedup: a repeated ref detected within {DEDUP_S:.0f} s counts as found",
         f"- Chapter candidates hidden behind a verse of the same chapter: {t['superseded']}"
         " (still scored, per LABELING.md)",
+        f"- Chapter candidates dimmed as said in passing (not counted): {t['dimmed']}",
         "",
         "## Detection",
         "",
