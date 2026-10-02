@@ -36,6 +36,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.detect.pipeline import detect  # noqa: E402
 
 SLACK_S = 1.0  # seconds of tolerance when matching a detection to a label window
+# "dedup" scoring: a missed ref still counts as found if the same ref was detected
+# within this many seconds. detect() reports a repeated mention once, which is what
+# the interpreter wants, but strict scoring counts the repeat as a miss.
+DEDUP_S = 15.0
 
 
 def corpus_dir() -> Path:
@@ -93,7 +97,7 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         best = next((c for c in hit if ref in c["correct_refs"]), hit[0])
         window_preds[best["id"]].add(ref)
 
-    tp = fp = fn = 0
+    tp = fp = fn = dedup_hits = 0
     fn_types: Counter[str] = Counter()
     fp_types: Counter[str] = Counter()
     for c in labels:
@@ -101,6 +105,12 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         pred = window_preds[c["id"]]
         c_tp, c_fp, c_fn = len(gold & pred), len(pred - gold), len(gold - pred)
         tp, fp, fn = tp + c_tp, fp + c_fp, fn + c_fn
+        for ref in gold - pred:
+            if any(
+                r == ref and c["t_start"] - DEDUP_S <= a <= c["t_end"] + DEDUP_S
+                for a, _, r in preds
+            ):
+                dedup_hits += 1
         for t in c.get("error_types", []):
             if c_fn:
                 fn_types[t] += c_fn
@@ -108,6 +118,7 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
                 fp_types[t] += c_fp
     fp += unlabeled_fp
     return {
+        "agreement": agreement(labels),
         "sermon": sermon,
         "labels": len(labels),
         "label_sources": dict(Counter(c.get("label_source", "?") for c in labels)),
@@ -117,8 +128,27 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         "fp": fp,
         "fn": fn,
         "unlabeled_fp": unlabeled_fp,
+        "dedup_hits": dedup_hits,
         "fp_by_type": dict(fp_types),
         "fn_by_type": dict(fn_types),
+    }
+
+
+def agreement(labels: list[dict]) -> dict:
+    """How often the first-pass AI label (claude_refs) matched the final label."""
+    rows = [c for c in labels if "claude_refs" in c]
+    same = sum(sorted(c["claude_refs"]) == sorted(c["correct_refs"]) for c in rows)
+    ai = sum(len(c["claude_refs"]) for c in rows)
+    human = sum(len(c["correct_refs"]) for c in rows)
+    both = sum(len(set(c["claude_refs"]) & set(c["correct_refs"])) for c in rows)
+    return {"windows": len(rows), "same": same, "ai_refs": ai, "human_refs": human, "both": both}
+
+
+def agreement_rates(a: dict) -> dict:
+    return {
+        "window_rate": round(a["same"] / a["windows"], 3) if a["windows"] else 0.0,
+        "ai_ref_precision": round(a["both"] / a["ai_refs"], 3) if a["ai_refs"] else 0.0,
+        "ai_ref_recall": round(a["both"] / a["human_refs"], 3) if a["human_refs"] else 0.0,
     }
 
 
@@ -149,13 +179,15 @@ def main() -> None:
     args = p.parse_args()
 
     per = [score_sermon(s, args.transcript) for s in args.sermons]
-    for s in per:
-        s.update(metrics(s["tp"], s["fp"], s["fn"]))
-    total = {
-        k: sum(s[k] for s in per)
-        for k in ("labels", "gold_refs", "detections", "tp", "fp", "fn", "unlabeled_fp")
-    }
-    total.update(metrics(total["tp"], total["fp"], total["fn"]))
+    keys = ("labels", "gold_refs", "detections", "tp", "fp", "fn", "unlabeled_fp", "dedup_hits")
+    total = {k: sum(s[k] for s in per) for k in keys}
+    for s in per + [total]:
+        s["strict"] = metrics(s["tp"], s["fp"], s["fn"])
+        s["dedup"] = metrics(s["tp"] + s["dedup_hits"], s["fp"], s["fn"] - s["dedup_hits"])
+    total["label_sources"] = dict(sum((Counter(s["label_sources"]) for s in per), Counter()))
+    total["agreement"] = dict(sum((Counter(s["agreement"]) for s in per), Counter()))
+    for s in per + [total]:
+        s["agreement"].update(agreement_rates(s["agreement"]))
     total["fp_by_type"] = dict(sum((Counter(s["fp_by_type"]) for s in per), Counter()))
     total["fn_by_type"] = dict(sum((Counter(s["fn_by_type"]) for s in per), Counter()))
 
@@ -171,8 +203,50 @@ def main() -> None:
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{args.name}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    print(f"\nwrote {out}")
+    out.with_suffix(".md").write_text(markdown(report), encoding="utf-8")
+    print(markdown(report))
+    print(f"wrote {out} and {out.with_suffix('.md').name}")
+
+
+def markdown(report: dict) -> str:
+    t = report["total"]
+    sources = ", ".join(f"{k} {v}" for k, v in t["label_sources"].items())
+    lines = [
+        f"# Score: {report['name']}",
+        "",
+        f"- Date: {report['at'][:10]}, code git {report['git_commit']}",
+        f"- Transcript: {report['transcript']}",
+        f"- Labels: {t['labels']} windows ({sources}), {t['gold_refs']} gold refs",
+        f"- Dedup: a repeated ref detected within {DEDUP_S:.0f} s counts as found",
+        "",
+        "## Detection",
+        "",
+        "| | detections | TP | FP | FN | precision | recall | F1 |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    rows = [("total", t)] + [(s["sermon"], s) for s in report["per_sermon"]]
+    for name, s in rows:
+        for kind in ("strict", "dedup"):
+            m = s[kind]
+            hits = s["dedup_hits"] if kind == "dedup" else 0
+            lines.append(
+                f"| {name} {kind} | {s['detections']} | {s['tp'] + hits} | {s['fp']} "
+                f"| {s['fn'] - hits} | {m['precision']} | {m['recall']} | {m['f1']} |"
+            )
+    lines += [
+        "",
+        "## First-pass AI labels vs final human labels",
+        "",
+        "| | windows | same label | window agreement | AI ref precision | AI ref recall |",
+        "|---|---|---|---|---|---|",
+    ]
+    for name, s in rows:
+        a = s["agreement"]
+        lines.append(
+            f"| {name} | {a['windows']} | {a['same']} | {a['window_rate']} "
+            f"| {a['ai_ref_precision']} | {a['ai_ref_recall']} |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":
