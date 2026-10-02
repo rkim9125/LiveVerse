@@ -61,10 +61,16 @@ def test_no_context_drops_relative():
 
 
 def test_segment_context_wins_over_displayed():
-    assert [str(m.ref) for m in detect("로마서 8장 28절, 그리고 29절", context="jo 3:16")] == [
+    assert [str(m.ref) for m in detect("로마서 8장 28절, 그리고 31절", context="jo 3:16")] == [
         "rm 8:28",
-        "rm 8:29",
+        "rm 8:31",
     ]
+
+
+def test_chapter_before_its_verse_is_superseded():
+    chapter, verse = detect("이사야 40장입니다. 이사야 40장 27절")
+    assert (str(chapter.ref), chapter.superseded) == ("is 40", True)
+    assert (str(verse.ref), verse.superseded) == ("is 40:27", False)
 
 
 def test_relative_chapter_with_verse():

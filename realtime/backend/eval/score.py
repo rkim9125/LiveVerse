@@ -58,6 +58,9 @@ def _mention_time(words: list[dict], span: tuple[int, int]) -> tuple[float, floa
     return (start, end) if start is not None else None
 
 
+SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
+
+
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
     """Detections with the time of the words they matched.
 
@@ -73,6 +76,7 @@ def predictions(transcript: Path) -> list[tuple[float, float, str]]:
         text = "".join(w["word"] for w in words) if words else seg["text"]
         mentions = detect(text, context=context, known_books=known_books)
         known_books.update(m.ref.book for m in mentions)
+        SUPERSEDED[str(transcript)] += sum(m.superseded for m in mentions)
         for m in mentions:
             when = _mention_time(words, m.span) if words else None
             start, end = when or (seg["start"], seg["end"])
@@ -134,6 +138,7 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         "fn": fn,
         "unlabeled_fp": unlabeled_fp,
         "dedup_hits": dedup_hits,
+        "superseded": SUPERSEDED[str(d / transcript_name)],
         "fp_by_type": dict(fp_types),
         "fn_by_type": dict(fn_types),
     }
@@ -184,7 +189,17 @@ def main() -> None:
     args = p.parse_args()
 
     per = [score_sermon(s, args.transcript) for s in args.sermons]
-    keys = ("labels", "gold_refs", "detections", "tp", "fp", "fn", "unlabeled_fp", "dedup_hits")
+    keys = (
+        "labels",
+        "gold_refs",
+        "detections",
+        "tp",
+        "fp",
+        "fn",
+        "unlabeled_fp",
+        "dedup_hits",
+        "superseded",
+    )
     total = {k: sum(s[k] for s in per) for k in keys}
     for s in per + [total]:
         s["strict"] = metrics(s["tp"], s["fp"], s["fn"])
@@ -227,6 +242,8 @@ def markdown(report: dict) -> str:
         f"- Transcript: {report['transcript']}",
         f"- Labels: {t['labels']} windows ({sources}), {t['gold_refs']} gold refs",
         f"- Dedup: a repeated ref detected within {DEDUP_S:.0f} s counts as found",
+        f"- Chapter candidates hidden behind a verse of the same chapter: {t['superseded']}"
+        " (still scored, per LABELING.md)",
         "",
         "## Detection",
         "",

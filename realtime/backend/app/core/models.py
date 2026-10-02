@@ -69,6 +69,10 @@ class Mention:
     span: tuple[int, int]  # character offsets into the original segment
     confidence: float
     fuzzy_from: str | None = None  # the misheard word, when the book was a near match
+    # A chapter-only candidate followed in the same segment by a verse of that
+    # chapter ("이사야 40장입니다. 이사야 40장 27절"). Both are kept; the console
+    # shows the verse and hides this one.
+    superseded: bool = False
 
     @property
     def is_high(self) -> bool:

@@ -59,6 +59,8 @@ _TRIGGER_RE = re.compile(
 )
 _PARTICLE_GAP_RE = re.compile(r"[\s,]*(?:을|를|은|는|의|에|으로|로|도|만)?[\s,]*")
 _NUMBER_TOKENS = ("NUM", "KO_V", "EN_V", "EN_V_ORD")
+# Between verses listed in a row: "19절 20절", "19절과 20절", "16절, 17절, 그리고 18절".
+_LIST_GAP_RE = re.compile(r"[\s,]*(?:과|와|그리고|및)?[\s,]*")
 
 
 @dataclass
@@ -168,6 +170,27 @@ class _Reader:
             return self.toks[k + 1].value, k + 2
         return None, k
 
+    def verse_run(self, k: int, start: int) -> tuple[int | None, int]:
+        """Korean verses said in a row become one range.
+
+        k is the token after a 절 token whose verse is start. Consecutive verses
+        ("19절 20절", "19절과 20절") extend the range; "1절 5절까지" ends it.
+        Out-of-order or skipped verses ("4절 3절", "1절과 4절") stay separate.
+        """
+        end, current = None, start
+        while self.is_type(k, "KO_V") and _LIST_GAP_RE.fullmatch(
+            self.text[self.toks[k - 1].end : self.toks[k].start]
+        ):
+            tok = self.toks[k]
+            until = self.text[tok.end :].lstrip().startswith("까지")
+            if tok.value == current + 1 or (until and tok.value > current):
+                end, current, k = tok.value, tok.value, k + 1
+                if until:
+                    break
+            else:
+                break
+        return end, k
+
     def open_marker(self, k: int) -> tuple[bool, int]:
         if self.is_type(k, "OPEN") and self.adjacent(k - 1, k):
             return True, k + 1
@@ -180,6 +203,8 @@ class _Reader:
         t = self.tok(k)
         if t.type in ("KO_V", "EN_V", "EN_V_ORD"):
             end, k2 = self.range_end(k + 1)
+            if end is None and t.type == "KO_V":
+                end, k2 = self.verse_run(k2, t.value)
             open_ended, k2 = self.open_marker(k2)
             return _Spec(None, t.value, end, open_ended, next_index=k2)
         if (
@@ -371,6 +396,8 @@ def parse(
 
         if t.type in ("KO_V", "EN_V", "EN_V_ORD"):
             end, k = reader.range_end(i + 1)
+            if end is None and t.type == "KO_V":
+                end, k = reader.verse_run(k, t.value)
             open_ended, k = reader.open_marker(k)
             out.append(
                 RawMention(

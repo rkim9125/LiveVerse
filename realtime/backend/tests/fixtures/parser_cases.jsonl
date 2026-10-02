@@ -25,7 +25,7 @@
 {"id": "ko-abs-025", "lang": "ko", "mode": "spoken", "input": "창세기 1장 1절과 요한복음 1장 1절을 비교하면", "context": null, "expect": [{"ref": "gn 1:1"}, {"ref": "jo 1:1"}], "tags": ["absolute", "multiple"]}
 {"id": "ko-abs-026", "lang": "ko", "mode": "spoken", "input": "시편 23편 첫 절", "context": null, "expect": [{"ref": "ps 23:1"}], "tags": ["absolute", "ordinal"]}
 {"id": "ko-abs-027", "lang": "ko", "mode": "spoken", "input": "시편 23편 마지막 절", "context": null, "expect": [{"ref": "ps 23:6"}], "tags": ["absolute", "last-verse"]}
-{"id": "ko-abs-028", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 그리고 17절", "context": null, "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17", "kind": "relative"}], "tags": ["relative", "segment-context"]}
+{"id": "ko-abs-028", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 그리고 17절", "context": null, "expect": [{"ref": "jo 3:16-17"}], "tags": ["range", "relative", "segment-context"]}
 {"id": "ko-sermon-001", "lang": "ko", "mode": "spoken", "input": "오늘 본문은 요한복음 3장 16절 말씀입니다", "context": null, "expect": [{"ref": "jo 3:16", "confidence": "high"}], "tags": ["absolute", "sermon"]}
 {"id": "ko-sermon-002", "lang": "ko", "mode": "spoken", "input": "함께 읽겠습니다", "context": null, "expect": [], "tags": ["negative", "sermon"]}
 {"id": "ko-sermon-003", "lang": "ko", "mode": "spoken", "input": "함께 읽겠습니다", "context": "jo 3:16", "expect": [], "tags": ["negative", "sermon"]}
@@ -51,8 +51,8 @@
 {"id": "ko-rel-012", "lang": "ko", "mode": "spoken", "input": "앞 절", "context": "jo 3:1", "expect": [{"ref": "jo 2:25", "confidence": "low"}], "tags": ["relative", "boundary"]}
 {"id": "ko-rel-013", "lang": "ko", "mode": "spoken", "input": "17절", "context": null, "expect": [], "tags": ["relative", "no-context"]}
 {"id": "ko-rel-014", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": null, "expect": [], "tags": ["relative", "no-context"]}
-{"id": "ko-rel-015", "lang": "ko", "mode": "spoken", "input": "16절, 17절, 그리고 18절", "context": "jo 3:16", "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17"}, {"ref": "jo 3:18"}], "tags": ["relative", "verse-list"]}
-{"id": "ko-rel-016", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 17절, 그리고 18절", "context": null, "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17"}, {"ref": "jo 3:18"}], "tags": ["relative", "verse-list", "segment-context"]}
+{"id": "ko-rel-015", "lang": "ko", "mode": "spoken", "input": "16절, 17절, 그리고 18절", "context": "jo 3:16", "expect": [{"ref": "jo 3:16-18"}], "tags": ["range", "relative", "verse-list"]}
+{"id": "ko-rel-016", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 17절, 그리고 18절", "context": null, "expect": [{"ref": "jo 3:16-18"}], "tags": ["range", "relative", "segment-context", "verse-list"]}
 {"id": "ko-rel-017", "lang": "ko", "mode": "spoken", "input": "마지막 절", "context": "jo 3:16", "expect": [{"ref": "jo 3:36"}], "tags": ["relative", "last-verse"]}
 {"id": "ko-neg-001", "lang": "ko", "mode": "spoken", "input": "요한이 말하기를", "context": null, "expect": [], "tags": ["negative"]}
 {"id": "ko-neg-002", "lang": "ko", "mode": "spoken", "input": "마가가 기록한 것처럼", "context": null, "expect": [], "tags": ["negative"]}
@@ -140,3 +140,10 @@
 {"id": "ko-unconfirmed-003", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절 그리고 로마서 8장 28절", "context": "is 40:27", "expect": [{"ref": "rm 8:28"}], "tags": ["unconfirmed-name"]}
 {"id": "ko-unconfirmed-004", "lang": "ko", "mode": "spoken", "input": "라오디기아 3장 15절", "context": "re 3:8", "expect": [{"ref": "re 3:15"}], "tags": ["unconfirmed-name", "not-book-like"]}
 {"id": "ko-unconfirmed-005", "lang": "ko", "mode": "spoken", "input": "교회의 모습은 3장 15절입니다", "context": "re 3:8", "expect": [{"ref": "re 3:15"}], "tags": ["unconfirmed-name", "not-book-like"]}
+{"id": "ko-range-001", "lang": "ko", "mode": "spoken", "input": "룻기 2장 19절 20절을 보시겠습니다", "context": null, "expect": [{"ref": "rt 2:19-20"}], "tags": ["range"]}
+{"id": "ko-range-002", "lang": "ko", "mode": "spoken", "input": "우리가 읽었던 19절과 20절에 보면", "context": "rt 2:1", "expect": [{"ref": "rt 2:19-20"}], "tags": ["range"]}
+{"id": "ko-range-003", "lang": "ko", "mode": "spoken", "input": "룻기 3장 1절 5절까지입니다", "context": null, "expect": [{"ref": "rt 3:1-5"}], "tags": ["range", "until"]}
+{"id": "ko-range-004", "lang": "ko", "mode": "spoken", "input": "12절 13절 같이 읽어볼까요", "context": "dt 10", "expect": [{"ref": "dt 10:12-13"}], "tags": ["range"]}
+{"id": "ko-range-005", "lang": "ko", "mode": "spoken", "input": "룻기 2장 4절 3절은", "context": null, "expect": [{"ref": "rt 2:4"}, {"ref": "rt 2:3"}], "tags": ["range", "out-of-order"]}
+{"id": "ko-range-006", "lang": "ko", "mode": "spoken", "input": "1절과 4절을 보면", "context": "rt 4", "expect": [{"ref": "rt 4:1"}, {"ref": "rt 4:4"}], "tags": ["range", "skipped"]}
+{"id": "ko-superseded-001", "lang": "ko", "mode": "spoken", "input": "이사야 40장입니다. 이사야 40장 27절", "context": null, "expect": [{"ref": "is 40"}, {"ref": "is 40:27"}], "tags": ["superseded"]}

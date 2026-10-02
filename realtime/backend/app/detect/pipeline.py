@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.core.models import Mention, Mode, Reference
 from app.detect.context import resolve
 from app.detect.normalize import normalize
@@ -50,4 +52,16 @@ def detect(
                 fuzzy_from=raw.fuzzy_from,
             )
         )
-    return mentions
+    return _mark_superseded(mentions)
+
+
+def _mark_superseded(mentions: list[Mention]) -> list[Mention]:
+    out = []
+    for i, m in enumerate(mentions):
+        ref = m.ref
+        later_verse = any(
+            n.ref.book == ref.book and n.ref.chapter == ref.chapter and n.ref.verse_start
+            for n in mentions[i + 1 :]
+        )
+        out.append(replace(m, superseded=True) if ref.verse_start is None and later_verse else m)
+    return out
