@@ -1,10 +1,22 @@
 # Bible Verse Lookup (성경 구절 조회)
 
-This is a lookup page for Korean–English parallel Bible verses. It is one HTML file and runs offline, with no server or build step.
+A single-page tool for looking up Bible verses side by side in Korean and English.
 
-You can type references in Korean or English. For example: `요 3:16`, `John 3:16`, `Jn 3:16`, `시 23`, `Ps 23:1-6` or `롬 8:28`.
+Built for church interpreters who need to find and display verses in real time during live sermons. Currently used at my church.
 
-## Quick start (demo)
+![KJV demo showing John 3:16](docs/screenshot.png)
+
+**Live demo:** _coming soon (GitHub Pages)_
+
+## Features
+
+- Look up verses using Korean or English book names and abbreviations: `요 3:16`, `John 3:16`, `Jn 3:16`, `롬 8:28`
+- Whole chapters (`시 23`) and verse ranges (`Ps 23:1-6`)
+- Korean and English text in parallel columns, stacked on narrow screens
+- One HTML file with no server, build step or network access needed
+- Ships with the full public-domain KJV, and you can plug in your own licensed translations
+
+## Quick start
 
 ```sh
 git clone <this repo>
@@ -14,6 +26,26 @@ open index.html
 ```
 
 The repo includes only the public-domain **King James Version**, in [data/sample/kjv.js](data/sample/kjv.js). The demo therefore shows a single English column and a **DEMO** badge in the header.
+
+## Design decisions
+
+### Loading data with a `<script>` tag instead of `fetch()`
+
+Interpreters often open the page straight from disk, so it has to work over `file://`. Browsers block `fetch()` of local files from a `file://` page, but they allow `<script src>`. Each data file therefore sets `window.BIBLE_DATA`, and the page loads it with a script tag, so the page still runs without a server.
+
+### Separating the app from the Bible text
+
+The first version embedded all of the text in the HTML, as one 8.6MB line. That made the code hard to share, because the translations we use are copyrighted. The page now tries `data/bible_data.js` (local and gitignored) first, then falls back to the bundled KJV. Both files use the same schema, so the app code doesn't care which one it got.
+
+### A pre-commit hook that blocks copyrighted text
+
+A `.gitignore` alone isn't enough, because renaming a file or copying text into a new file gets around it. The hook checks every staged file in three ways:
+
+- it blocks known local data file names
+- it blocks signature phrases that appear in the NKJV and the Korean translations but not in the KJV
+- it blocks any file over 1MB outside `data/sample/`
+
+I ran it against the full KJV to confirm it raises no false positives, and against renamed copies of the real data to confirm it catches them.
 
 ## Using your own translations (Korean/English parallel)
 
@@ -33,42 +65,32 @@ python3 scripts/build_data.py --ko ko.json --en en.json --ko-name 개역한글 -
 This writes `data/bible_data.js`. `index.html` loads it automatically when it exists, and falls back to the KJV demo otherwise.
 **`data/bible_data.js` is gitignored and must never be committed.**
 
-Book abbreviations (`gn`, `ex`, … `re`) are listed in [scripts/books.py](scripts/books.py).
+Book abbreviations (`gn`, `ex`, ... `re`) are listed in [scripts/books.py](scripts/books.py).
 
-## Project layout
+You can also run the copyright check on any files directly:
+
+```sh
+scripts/check_no_copyrighted.sh path/to/file ...
+```
+
+### Project layout
 
 ```
 index.html                        the app (no Bible text embedded)
 data/bible_data.js                your local data (gitignored)
 data/sample/kjv.js                public-domain KJV
 data/sample/SOURCE.md             KJV source and license
-scripts/build_data.py             your JSON → data/bible_data.js
-scripts/build_sample.py           eBible.org KJV → data/sample/kjv.js
+scripts/build_data.py             your JSON -> data/bible_data.js
+scripts/build_sample.py           eBible.org KJV -> data/sample/kjv.js
 scripts/check_no_copyrighted.sh   blocks copyrighted Bible text from commits
 .githooks/pre-commit              runs the check above before each commit
+docs/screenshot.png               README screenshot
 ```
 
-The page loads data with a `<script>` tag rather than `fetch()`. That way it also works when you open it directly from disk (`file://`).
+## Roadmap
 
-## Pre-commit hook
-
-Enable it once after cloning:
-
-```sh
-git config core.hooksPath .githooks
-```
-
-The hook rejects a commit if any staged file:
-
-- has a local-data file name (`nkjv*`, `bible_data*`, `*.bak`, …)
-- contains signature phrases from NKJV or Korean Bible text
-- is larger than 1MB (files under `data/sample/` are exempt)
-
-You can also run the check on any files directly:
-
-```sh
-scripts/check_no_copyrighted.sh path/to/file ...
-```
+- **Real-time sermon verse detection:** use speech-to-text to pick up verse references as the preacher says them, and show those verses automatically.
+- **Backend API:** serve verse lookups from an API, so other tools such as slide software and the detection service can use the same data.
 
 ## License
 
