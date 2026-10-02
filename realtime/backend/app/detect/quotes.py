@@ -76,11 +76,16 @@ class QuoteIndex:
         scored = [(n / index.grams[k], n, k) for k, n in hits.items() if n >= MIN_HITS]
         return sorted(scored, reverse=True)[:2]
 
-    def find(self, text: str, spoken: Reference | None = None) -> Mention | None:
+    def find(
+        self, text: str, spoken: Reference | None = None, announced: bool = False
+    ) -> Mention | None:
         """The quoted verse in text, or None.
 
-        A verse inside the passage the preacher is already on (spoken) is not
-        reported: that is reading the announced text aloud, not a quote.
+        spoken is where the preacher is. A verse inside that passage is not
+        reported: that is reading the text aloud, not a quote. When the spoken
+        chapter was announced for reading (announced=True, "룻기 4장 같이
+        읽겠습니다"), the whole chapter counts as being read. A chapter named in
+        passing ("신명기 25장을 읽어보면") does not, so a quote from it is reported.
         """
         best = self._best(self.korean, _ko_grams(text)) or self._best(self.english, _en_grams(text))
         if not best:
@@ -90,6 +95,8 @@ class QuoteIndex:
         if coverage < MIN_COVERAGE or coverage - second < MIN_MARGIN:
             return None
         if spoken and _inside(spoken, book, chapter, verse):
+            return None
+        if spoken and announced and (spoken.book, spoken.chapter) == (book, chapter):
             return None
         ref = Reference(book, chapter, verse)
         return Mention(ref, "absolute", "", (0, 0), CONF_QUOTE)

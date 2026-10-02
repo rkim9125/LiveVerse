@@ -33,6 +33,11 @@ def test_chapter_context_still_finds_the_verse(kjv):
     assert str(kjv.find(said, spoken=Reference.parse("jo 3")).ref) == "jo 3:16"
 
 
+def test_reading_an_announced_chapter_is_not_a_quote(kjv):
+    said = "for God so loved the world, that he gave his only begotten Son"
+    assert kjv.find(said, spoken=Reference.parse("jo 3"), announced=True) is None
+
+
 def test_short_common_phrase_is_not_a_quote(kjv):
     assert kjv.find("and he said unto them, go") is None
 

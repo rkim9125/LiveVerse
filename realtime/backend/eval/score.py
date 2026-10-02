@@ -98,6 +98,7 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
     not worth displaying). Books count as shown only for candidates that were not
     dimmed, as if the interpreter clicked each of those."""
     context = None
+    context_announced = False  # the context chapter was not dimmed
     known_books: set[str] = set()
     timeline = []
     for i, seg in enumerate(segments):
@@ -105,7 +106,7 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
         text = "".join(w["word"] for w in words) if words else seg["text"]
         mentions = detect(text, context=context, known_books=known_books)
         if QUOTES["index"] is not None:
-            quoted = QUOTES["index"].find(text, spoken=context)
+            quoted = QUOTES["index"].find(text, spoken=context, announced=context_announced)
             if quoted and all(m.ref != quoted.ref for m in mentions):
                 mentions.append(quoted)
         timed = TimedSegment(seg["start"], seg["end"], text)
@@ -114,6 +115,7 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
             start, end = when or (seg["start"], seg["end"])
             timed.mentions.append((m, start, end))
             context = m.ref
+            context_announced = (i, j) not in dimmed
             if (i, j) not in dimmed:
                 known_books.add(m.ref.book)
         timeline.append(timed)
