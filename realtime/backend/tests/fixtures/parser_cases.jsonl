@@ -1,0 +1,119 @@
+{"id": "ko-abs-001", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절", "context": null, "expect": [{"ref": "jo 3:16", "kind": "absolute", "matched": "요한복음 3장 16절", "confidence": "high"}], "tags": ["absolute"]}
+{"id": "ko-abs-002", "lang": "ko", "mode": "spoken", "input": "요한복음 삼 장 십육 절", "context": null, "expect": [{"ref": "jo 3:16", "matched": "요한복음 삼 장 십육 절"}], "tags": ["absolute", "numerals"]}
+{"id": "ko-abs-003", "lang": "ko", "mode": "spoken", "input": "요한복음3장16절", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute", "spacing"]}
+{"id": "ko-abs-004", "lang": "ko", "mode": "spoken", "input": "요한복음 3:16", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute"]}
+{"id": "ko-abs-005", "lang": "ko", "mode": "spoken", "input": "시편 23편", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["absolute", "psalms"]}
+{"id": "ko-abs-006", "lang": "ko", "mode": "spoken", "input": "시편 23편 1절", "context": null, "expect": [{"ref": "ps 23:1"}], "tags": ["absolute", "psalms"]}
+{"id": "ko-abs-007", "lang": "ko", "mode": "spoken", "input": "시편 백십구 편 백오 절", "context": null, "expect": [{"ref": "ps 119:105"}], "tags": ["absolute", "numerals", "psalms"]}
+{"id": "ko-abs-008", "lang": "ko", "mode": "spoken", "input": "로마서 8장", "context": null, "expect": [{"ref": "rm 8"}], "tags": ["absolute", "chapter"]}
+{"id": "ko-abs-009", "lang": "ko", "mode": "spoken", "input": "로마서 8장 28절 말씀입니다", "context": null, "expect": [{"ref": "rm 8:28", "confidence": "high"}], "tags": ["absolute", "trigger"]}
+{"id": "ko-abs-010", "lang": "ko", "mode": "spoken", "input": "오늘 본문은 에베소서 2장 8절부터 10절까지입니다", "context": null, "expect": [{"ref": "eph 2:8-10"}], "tags": ["absolute", "range", "sermon"]}
+{"id": "ko-abs-011", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절에서 18절", "context": null, "expect": [{"ref": "jo 3:16-18"}], "tags": ["absolute", "range"]}
+{"id": "ko-abs-012", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16~18절", "context": null, "expect": [{"ref": "jo 3:16-18"}], "tags": ["absolute", "range"]}
+{"id": "ko-abs-013", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16 내지 18절", "context": null, "expect": [{"ref": "jo 3:16-18"}], "tags": ["absolute", "range"]}
+{"id": "ko-abs-014", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절 이하", "context": null, "expect": [{"ref": "jo 3:16+"}], "tags": ["absolute", "open"]}
+{"id": "ko-abs-015", "lang": "ko", "mode": "spoken", "input": "고린도전서 13장 4절", "context": null, "expect": [{"ref": "1co 13:4"}], "tags": ["absolute", "numbered"]}
+{"id": "ko-abs-016", "lang": "ko", "mode": "spoken", "input": "고린도 전서 13장", "context": null, "expect": [{"ref": "1co 13"}], "tags": ["absolute", "numbered", "spacing"]}
+{"id": "ko-abs-017", "lang": "ko", "mode": "spoken", "input": "예레미야애가 3장 22절", "context": null, "expect": [{"ref": "lm 3:22"}], "tags": ["absolute", "longest"]}
+{"id": "ko-abs-018", "lang": "ko", "mode": "spoken", "input": "데살로니가전서 5장 16절에서 18절", "context": null, "expect": [{"ref": "1ts 5:16-18"}], "tags": ["absolute", "range", "numbered"]}
+{"id": "ko-abs-019", "lang": "ko", "mode": "spoken", "input": "요한계시록 22장 20절", "context": null, "expect": [{"ref": "re 22:20"}], "tags": ["absolute"]}
+{"id": "ko-abs-020", "lang": "ko", "mode": "spoken", "input": "창세기 1장 1절", "context": null, "expect": [{"ref": "gn 1:1"}], "tags": ["absolute"]}
+{"id": "ko-abs-021", "lang": "ko", "mode": "spoken", "input": "요한복음 3장을 보시면", "context": null, "expect": [{"ref": "jo 3", "confidence": "high"}], "tags": ["absolute", "particle", "trigger"]}
+{"id": "ko-abs-022", "lang": "ko", "mode": "spoken", "input": "로마서에서 8장 28절", "context": null, "expect": [{"ref": "rm 8:28"}], "tags": ["absolute", "particle"]}
+{"id": "ko-abs-023", "lang": "ko", "mode": "spoken", "input": "요한복음을 펴시면 3장 16절입니다", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute", "pending-book"]}
+{"id": "ko-abs-024", "lang": "ko", "mode": "spoken", "input": "시편 23편 1절과 3절", "context": null, "expect": [{"ref": "ps 23:1"}, {"ref": "ps 23:3", "kind": "relative"}], "tags": ["list", "relative"]}
+{"id": "ko-abs-025", "lang": "ko", "mode": "spoken", "input": "창세기 1장 1절과 요한복음 1장 1절을 비교하면", "context": null, "expect": [{"ref": "gn 1:1"}, {"ref": "jo 1:1"}], "tags": ["absolute", "multiple"]}
+{"id": "ko-abs-026", "lang": "ko", "mode": "spoken", "input": "시편 23편 첫 절", "context": null, "expect": [{"ref": "ps 23:1"}], "tags": ["absolute", "ordinal"]}
+{"id": "ko-abs-027", "lang": "ko", "mode": "spoken", "input": "시편 23편 마지막 절", "context": null, "expect": [{"ref": "ps 23:6"}], "tags": ["absolute", "last-verse"]}
+{"id": "ko-abs-028", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 그리고 17절", "context": null, "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17", "kind": "relative"}], "tags": ["relative", "segment-context"]}
+{"id": "ko-sermon-001", "lang": "ko", "mode": "spoken", "input": "오늘 본문은 요한복음 3장 16절 말씀입니다", "context": null, "expect": [{"ref": "jo 3:16", "confidence": "high"}], "tags": ["absolute", "sermon"]}
+{"id": "ko-sermon-002", "lang": "ko", "mode": "spoken", "input": "함께 읽겠습니다", "context": null, "expect": [], "tags": ["negative", "sermon"]}
+{"id": "ko-sermon-003", "lang": "ko", "mode": "spoken", "input": "함께 읽겠습니다", "context": "jo 3:16", "expect": [], "tags": ["negative", "sermon"]}
+{"id": "ko-sermon-004", "lang": "ko", "mode": "spoken", "input": "성경 로마서 8장을 펴시기 바랍니다", "context": null, "expect": [{"ref": "rm 8", "confidence": "high"}], "tags": ["absolute", "sermon"]}
+{"id": "ko-sermon-005", "lang": "ko", "mode": "spoken", "input": "성경 8장을 펴시기 바랍니다", "context": "rm 5:1", "expect": [{"ref": "rm 8", "kind": "relative"}], "tags": ["relative", "sermon"]}
+{"id": "ko-stt-001", "lang": "ko", "mode": "spoken", "input": "요한 복음 3장 16절", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute", "spacing"]}
+{"id": "ko-stt-002", "lang": "ko", "mode": "spoken", "input": "요한복음 삼장 십육절", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute", "spacing", "numerals"]}
+{"id": "ko-stt-003", "lang": "ko", "mode": "spoken", "input": "요한일서 1장 9절", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["absolute", "numbered"]}
+{"id": "ko-stt-004", "lang": "ko", "mode": "spoken", "input": "요한 1서 1장 9절", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["absolute", "numbered", "spacing"]}
+{"id": "ko-stt-005", "lang": "ko", "mode": "spoken", "input": "요한 일 서 1장 9절", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["absolute", "numbered", "spacing"]}
+{"id": "ko-stt-006", "lang": "ko", "mode": "spoken", "input": "요한 일서 1장 9절", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["absolute", "numbered", "spacing"]}
+{"id": "ko-rel-001", "lang": "ko", "mode": "spoken", "input": "17절", "context": "jo 3:16", "expect": [{"ref": "jo 3:17", "kind": "relative"}], "tags": ["relative"]}
+{"id": "ko-rel-002", "lang": "ko", "mode": "spoken", "input": "17절 말씀 보시면", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative", "trigger"]}
+{"id": "ko-rel-003", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative", "next"]}
+{"id": "ko-rel-004", "lang": "ko", "mode": "spoken", "input": "그 다음 절도 보시면", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative", "next"]}
+{"id": "ko-rel-005", "lang": "ko", "mode": "spoken", "input": "앞 절", "context": "jo 3:16", "expect": [{"ref": "jo 3:15"}], "tags": ["relative", "prev"]}
+{"id": "ko-rel-006", "lang": "ko", "mode": "spoken", "input": "다음 장", "context": "jo 3:16", "expect": [{"ref": "jo 4"}], "tags": ["relative", "chapter"]}
+{"id": "ko-rel-007", "lang": "ko", "mode": "spoken", "input": "4장으로 넘어가서", "context": "jo 3:16", "expect": [{"ref": "jo 4"}], "tags": ["relative", "chapter"]}
+{"id": "ko-rel-008", "lang": "ko", "mode": "spoken", "input": "같은 장 20절", "context": "jo 3:16", "expect": [{"ref": "jo 3:20"}], "tags": ["relative"]}
+{"id": "ko-rel-009", "lang": "ko", "mode": "spoken", "input": "다시 16절로", "context": "jo 3:16", "expect": [{"ref": "jo 3:16"}], "tags": ["relative"]}
+{"id": "ko-rel-010", "lang": "ko", "mode": "spoken", "input": "18절부터 21절까지", "context": "jo 3:16", "expect": [{"ref": "jo 3:18-21"}], "tags": ["relative", "range"]}
+{"id": "ko-rel-011", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": "jo 3:36", "expect": [{"ref": "jo 4:1", "confidence": "low"}], "tags": ["relative", "boundary"]}
+{"id": "ko-rel-012", "lang": "ko", "mode": "spoken", "input": "앞 절", "context": "jo 3:1", "expect": [{"ref": "jo 2:25", "confidence": "low"}], "tags": ["relative", "boundary"]}
+{"id": "ko-rel-013", "lang": "ko", "mode": "spoken", "input": "17절", "context": null, "expect": [], "tags": ["relative", "no-context"]}
+{"id": "ko-rel-014", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": null, "expect": [], "tags": ["relative", "no-context"]}
+{"id": "ko-rel-015", "lang": "ko", "mode": "spoken", "input": "16절, 17절, 그리고 18절", "context": "jo 3:16", "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17"}, {"ref": "jo 3:18"}], "tags": ["relative", "verse-list"]}
+{"id": "ko-rel-016", "lang": "ko", "mode": "spoken", "input": "요한복음 3장 16절, 17절, 그리고 18절", "context": null, "expect": [{"ref": "jo 3:16"}, {"ref": "jo 3:17"}, {"ref": "jo 3:18"}], "tags": ["relative", "verse-list", "segment-context"]}
+{"id": "ko-rel-017", "lang": "ko", "mode": "spoken", "input": "마지막 절", "context": "jo 3:16", "expect": [{"ref": "jo 3:36"}], "tags": ["relative", "last-verse"]}
+{"id": "ko-neg-001", "lang": "ko", "mode": "spoken", "input": "요한이 말하기를", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-002", "lang": "ko", "mode": "spoken", "input": "마가가 기록한 것처럼", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-003", "lang": "ko", "mode": "spoken", "input": "누가 3장을 읽었나요", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-004", "lang": "ko", "mode": "spoken", "input": "3장짜리 편지를 썼습니다", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-005", "lang": "ko", "mode": "spoken", "input": "다음 주에 뵙겠습니다", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-006", "lang": "ko", "mode": "spoken", "input": "고전 음악을 좋아합니다", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-007", "lang": "ko", "mode": "spoken", "input": "요일마다 모입니다", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-008", "lang": "ko", "mode": "spoken", "input": "했어요 3번", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-009", "lang": "ko", "mode": "spoken", "input": "이 장에서 바울은", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-010", "lang": "ko", "mode": "spoken", "input": "이 구절을 기억하세요", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-neg-011", "lang": "ko", "mode": "spoken", "input": "교회 장로님께서", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-hymn-001", "lang": "ko", "mode": "spoken", "input": "찬송가 305장 1절과 3절을 부르겠습니다", "context": null, "expect": [], "tags": ["negative", "hymn"]}
+{"id": "ko-hymn-002", "lang": "ko", "mode": "spoken", "input": "새찬송가 305장", "context": null, "expect": [], "tags": ["negative", "hymn"]}
+{"id": "ko-hymn-003", "lang": "ko", "mode": "spoken", "input": "찬송 305장 1절", "context": null, "expect": [], "tags": ["negative", "hymn"]}
+{"id": "ko-hymn-004", "lang": "ko", "mode": "spoken", "input": "새 찬송가 405장 2절", "context": null, "expect": [], "tags": ["negative", "hymn"]}
+{"id": "ko-hymn-005", "lang": "ko", "mode": "spoken", "input": "새찬송가 305장 3절", "context": "jo 3:16", "expect": [], "tags": ["negative", "hymn"]}
+{"id": "ko-hymn-006", "lang": "ko", "mode": "spoken", "input": "찬송가 305장을 부르고 요한복음 3장 16절을 읽겠습니다", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["hymn", "absolute"]}
+{"id": "ko-typed-001", "lang": "ko", "mode": "typed", "input": "요 3:16", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["typed"]}
+{"id": "ko-typed-002", "lang": "ko", "mode": "typed", "input": "롬 8:28", "context": null, "expect": [{"ref": "rm 8:28"}], "tags": ["typed"]}
+{"id": "ko-typed-003", "lang": "ko", "mode": "typed", "input": "고전 13:4-7", "context": null, "expect": [{"ref": "1co 13:4-7"}], "tags": ["typed"]}
+{"id": "ko-typed-004", "lang": "ko", "mode": "typed", "input": "요일 1:9", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["typed"]}
+{"id": "ko-typed-005", "lang": "ko", "mode": "typed", "input": "시 23", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["typed"]}
+{"id": "ko-typed-006", "lang": "ko", "mode": "typed", "input": "창 1:1", "context": null, "expect": [{"ref": "gn 1:1"}], "tags": ["typed"]}
+{"id": "ko-typed-007", "lang": "ko", "mode": "typed", "input": "요 3 16", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["typed"]}
+{"id": "en-abs-001", "lang": "en", "mode": "spoken", "input": "John 3:16", "context": null, "expect": [{"ref": "jo 3:16", "kind": "absolute", "matched": "John 3:16", "confidence": "high"}], "tags": ["absolute"]}
+{"id": "en-abs-002", "lang": "en", "mode": "spoken", "input": "John 3 16", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute"]}
+{"id": "en-abs-003", "lang": "en", "mode": "spoken", "input": "John three sixteen", "context": null, "expect": [{"ref": "jo 3:16", "matched": "John three sixteen"}], "tags": ["absolute", "numerals"]}
+{"id": "en-abs-004", "lang": "en", "mode": "spoken", "input": "John chapter three verse sixteen", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute", "numerals"]}
+{"id": "en-abs-005", "lang": "en", "mode": "spoken", "input": "John 3 verse 16", "context": null, "expect": [{"ref": "jo 3:16"}], "tags": ["absolute"]}
+{"id": "en-abs-006", "lang": "en", "mode": "spoken", "input": "Psalm 23", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["absolute", "psalms"]}
+{"id": "en-abs-007", "lang": "en", "mode": "spoken", "input": "Psalms 23", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["absolute", "psalms"]}
+{"id": "en-abs-008", "lang": "en", "mode": "spoken", "input": "Psalm one hundred nineteen verse one hundred five", "context": null, "expect": [{"ref": "ps 119:105"}], "tags": ["absolute", "numerals"]}
+{"id": "en-abs-009", "lang": "en", "mode": "spoken", "input": "Psalm one nineteen", "context": null, "expect": [{"ref": "ps 119", "confidence": "low"}], "tags": ["absolute", "numerals", "fallback"]}
+{"id": "en-abs-010", "lang": "en", "mode": "spoken", "input": "the twenty third Psalm", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["absolute", "ordinal"]}
+{"id": "en-abs-011", "lang": "en", "mode": "spoken", "input": "the twenty-third Psalm", "context": null, "expect": [{"ref": "ps 23"}], "tags": ["absolute", "ordinal"]}
+{"id": "en-abs-012", "lang": "en", "mode": "spoken", "input": "the third chapter of John", "context": null, "expect": [{"ref": "jo 3"}], "tags": ["absolute", "ordinal"]}
+{"id": "en-abs-013", "lang": "en", "mode": "spoken", "input": "First Corinthians 13", "context": null, "expect": [{"ref": "1co 13"}], "tags": ["absolute", "numbered"]}
+{"id": "en-abs-014", "lang": "en", "mode": "spoken", "input": "1 Corinthians 13 verses 4 through 7", "context": null, "expect": [{"ref": "1co 13:4-7"}], "tags": ["absolute", "numbered", "range"]}
+{"id": "en-abs-015", "lang": "en", "mode": "spoken", "input": "First John 1 9", "context": null, "expect": [{"ref": "1jo 1:9"}], "tags": ["absolute", "numbered"]}
+{"id": "en-abs-016", "lang": "en", "mode": "spoken", "input": "John 1 9", "context": null, "expect": [{"ref": "jo 1:9"}], "tags": ["absolute"]}
+{"id": "en-abs-017", "lang": "en", "mode": "spoken", "input": "Romans 8 28", "context": null, "expect": [{"ref": "rm 8:28"}], "tags": ["absolute"]}
+{"id": "en-abs-018", "lang": "en", "mode": "spoken", "input": "Romans eight twenty eight", "context": null, "expect": [{"ref": "rm 8:28"}], "tags": ["absolute", "numerals"]}
+{"id": "en-abs-019", "lang": "en", "mode": "spoken", "input": "Song of Solomon 2", "context": null, "expect": [{"ref": "so 2"}], "tags": ["absolute"]}
+{"id": "en-abs-020", "lang": "en", "mode": "spoken", "input": "Song of Songs 2", "context": null, "expect": [{"ref": "so 2"}], "tags": ["absolute"]}
+{"id": "en-abs-021", "lang": "en", "mode": "spoken", "input": "Revelations 22:20", "context": null, "expect": [{"ref": "re 22:20"}], "tags": ["absolute"]}
+{"id": "en-abs-022", "lang": "en", "mode": "spoken", "input": "let's turn to Ephesians 2 verses 8 through 10", "context": null, "expect": [{"ref": "eph 2:8-10", "confidence": "high"}], "tags": ["absolute", "range", "trigger"]}
+{"id": "en-abs-023", "lang": "en", "mode": "spoken", "input": "Ephesians 2:8 to 10", "context": null, "expect": [{"ref": "eph 2:8-10"}], "tags": ["absolute", "range"]}
+{"id": "en-abs-024", "lang": "en", "mode": "spoken", "input": "Second Kings 5", "context": null, "expect": [{"ref": "2kgs 5"}], "tags": ["absolute", "numbered"]}
+{"id": "en-rel-001", "lang": "en", "mode": "spoken", "input": "verse 17", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative"]}
+{"id": "en-rel-002", "lang": "en", "mode": "spoken", "input": "next verse", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative"]}
+{"id": "en-rel-003", "lang": "en", "mode": "spoken", "input": "the following verse", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative"]}
+{"id": "en-rel-004", "lang": "en", "mode": "spoken", "input": "previous verse", "context": "jo 3:16", "expect": [{"ref": "jo 3:15"}], "tags": ["relative"]}
+{"id": "en-rel-005", "lang": "en", "mode": "spoken", "input": "back to verse 5", "context": "jo 3:16", "expect": [{"ref": "jo 3:5"}], "tags": ["relative"]}
+{"id": "en-rel-006", "lang": "en", "mode": "spoken", "input": "verses 18 through 21", "context": "jo 3:16", "expect": [{"ref": "jo 3:18-21"}], "tags": ["relative"]}
+{"id": "en-rel-007", "lang": "en", "mode": "spoken", "input": "verse seventeen", "context": "jo 3:16", "expect": [{"ref": "jo 3:17"}], "tags": ["relative"]}
+{"id": "en-rel-008", "lang": "en", "mode": "spoken", "input": "chapter 4", "context": "jo 3:16", "expect": [{"ref": "jo 4"}], "tags": ["relative"]}
+{"id": "en-rel-009", "lang": "en", "mode": "spoken", "input": "verse 17", "context": null, "expect": [], "tags": ["relative", "no-context"]}
+{"id": "en-neg-001", "lang": "en", "mode": "spoken", "input": "John said to them", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "en-neg-002", "lang": "en", "mode": "spoken", "input": "Mark wrote this", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "en-neg-003", "lang": "en", "mode": "spoken", "input": "see you next week", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "en-neg-004", "lang": "en", "mode": "spoken", "input": "I have three sons and sixteen grandchildren", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "en-neg-005", "lang": "en", "mode": "spoken", "input": "hymn 305 verse 3", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "en-neg-006", "lang": "en", "mode": "spoken", "input": "a remarkable 3 days", "context": null, "expect": [], "tags": ["negative"]}
