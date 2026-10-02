@@ -2,7 +2,7 @@
 
 A single-page tool for looking up Bible verses side by side in Korean and English.
 
-Built for church interpreters who need to find and display verses in real time during live sermons. Currently used at my church.
+Built for church interpreters who need to find and display verses in real time during live sermons. The program our interpreters had been using did not run on Mac, so I built a replacement that works in any browser. Currently used at my church.
 
 ![KJV demo showing John 3:16](docs/screenshot.png)
 
