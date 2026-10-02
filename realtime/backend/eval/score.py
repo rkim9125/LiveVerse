@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.detect.announce import TimedSegment, dimmed_chapters  # noqa: E402
 from app.detect.pipeline import detect  # noqa: E402
+from app.detect.quotes import QuoteIndex  # noqa: E402
 
 SLACK_S = 1.0  # seconds of tolerance when matching a detection to a label window
 # "dedup" scoring: a missed ref still counts as found if the same ref was detected
@@ -61,6 +62,7 @@ def _mention_time(words: list[dict], span: tuple[int, int]) -> tuple[float, floa
 
 SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
 DIMMED: Counter[str] = Counter()  # chapter candidates said in passing, per file
+QUOTES: dict[str, QuoteIndex | None] = {"index": None}  # set by --quotes
 
 
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
@@ -102,9 +104,13 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
         words = seg.get("words") or []
         text = "".join(w["word"] for w in words) if words else seg["text"]
         mentions = detect(text, context=context, known_books=known_books)
+        if QUOTES["index"] is not None:
+            quoted = QUOTES["index"].find(text, spoken=context)
+            if quoted and all(m.ref != quoted.ref for m in mentions):
+                mentions.append(quoted)
         timed = TimedSegment(seg["start"], seg["end"], text)
         for j, m in enumerate(mentions):
-            when = _mention_time(words, m.span) if words else None
+            when = _mention_time(words, m.span) if words and m.span[1] else None
             start, end = when or (seg["start"], seg["end"])
             timed.mentions.append((m, start, end))
             context = m.ref
@@ -215,7 +221,12 @@ def main() -> None:
     p.add_argument("sermons", nargs="+")
     p.add_argument("--transcript", default="whisper.json")
     p.add_argument("--name", required=True, help="report name, e.g. baseline")
+    p.add_argument("--quotes", action="store_true", help="also find verses quoted without a number")
     args = p.parse_args()
+    if args.quotes:
+        from app.core import bible_text
+
+        QUOTES["index"] = QuoteIndex(bible_text.load())
 
     per = [score_sermon(s, args.transcript) for s in args.sermons]
     keys = (
@@ -250,6 +261,7 @@ def main() -> None:
         "at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
         "transcript": args.transcript,
+        "quotes": args.quotes,
         "total": total,
         "per_sermon": per,
     }
