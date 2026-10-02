@@ -21,6 +21,14 @@ Usage (from realtime/backend):
     uv run python eval/review_labels.py              # all sermons in the corpus
     uv run python eval/review_labels.py sermon-02    # one sermon
     uv run python eval/review_labels.py --type quote # only quote-search candidates
+    uv run python eval/review_labels.py --blind      # hide detector output and suggestions
+
+Blind mode is on automatically for test-set sermons (meta.json "split": "test").
+It shows only the time, the transcript and the audio: no detect() result, no
+suggested label, no note. There is no "a" key, items come in time order, and
+n adds a mention that no candidate covers:
+
+    n  add a missed mention: enter its time (mm:ss or h:mm:ss) and the refs
 """
 
 from __future__ import annotations
@@ -68,6 +76,9 @@ class Sermon:
             self.items = [json.loads(line) for line in f if line.strip()]
         self.segments = self._load_segments("whisper.json")
         self.prompted = self._load_segments("whisper.prompted.json")
+        meta_path = path / "meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+        self.split = meta.get("split", "")
 
     def _load_segments(self, name: str) -> list[dict]:
         path = self.dir / name
@@ -96,15 +107,51 @@ def is_done(item: dict) -> bool:
     return item.get("label_source") == "user"
 
 
-def review_order(sermons: list[Sermon], only_type: str | None = None) -> list[tuple[Sermon, dict]]:
+def review_order(
+    sermons: list[Sermon], only_type: str | None = None, blind: bool = False
+) -> list[tuple[Sermon, dict]]:
     queue = [
         (s, item)
         for s in sermons
         for item in s.items
         if only_type is None or item.get("type") == only_type
     ]
-    queue.sort(key=lambda p: (ORDER.get(p[1].get("decision"), 3), p[0].name, p[1]["t_start"]))
+    if blind:
+        queue.sort(key=lambda p: (p[0].name, p[1]["t_start"]))
+    else:
+        queue.sort(key=lambda p: (ORDER.get(p[1].get("decision"), 3), p[0].name, p[1]["t_start"]))
     return queue
+
+
+def parse_time(text: str) -> float:
+    """'12:34' or '1:02:03' or '754' -> seconds."""
+    parts = [float(p) for p in text.strip().split(":")]
+    if not parts or len(parts) > 3:
+        raise ValueError(f"bad time {text!r}")
+    seconds = 0.0
+    for p in parts:
+        seconds = seconds * 60 + p
+    return seconds
+
+
+def missed_item(sermon: Sermon, at: float, refs: list[str]) -> dict:
+    """A window for a mention that no candidate covered, added by the reviewer."""
+    n = 1 + sum(it["id"].startswith(f"{sermon.name}-m") for it in sermon.items)
+    m, s = divmod(int(at), 60)
+    h, m = divmod(m, 60)
+    return {
+        "id": f"{sermon.name}-m{n:02d}",
+        "sermon": sermon.name,
+        "t_start": round(max(0.0, at - 3), 1),
+        "t_end": round(at + 5, 1),
+        "time": f"{h}:{m:02d}:{s:02d}",
+        "source": "manual",
+        "decision": "fix",
+        "correct_refs": refs,
+        "label_source": "user",
+        "review_status": "added",
+        "notes": "",
+    }
 
 
 def parse_refs(text: str) -> list[str]:
@@ -159,7 +206,9 @@ def text_around(segments: list[dict], start: float, end: float) -> tuple[str, st
     return before[-CONTEXT_CHARS:], inside, after[:CONTEXT_CHARS]
 
 
-def show(sermon: Sermon, item: dict, pos: int, total: int, done: int, message: str) -> None:
+def show(
+    sermon: Sermon, item: dict, pos: int, total: int, done: int, message: str, blind: bool
+) -> None:
     print("\033[2J\033[H", end="")
     for line in RULES:
         print(f"{DIM}{line}{RESET}")
@@ -180,6 +229,14 @@ def show(sermon: Sermon, item: dict, pos: int, total: int, done: int, message: s
         if p_inside and p_inside != inside:
             print(f"{CYAN}prompted transcript:{RESET} {p_inside}")
     print()
+    if blind:
+        if is_done(item):
+            print(f"your label:      {item.get('decision')}  {item.get('correct_refs')}")
+        print()
+        print(f"{DIM}f refs  r no reference  u unsure  n add missed  p play  b back  q quit{RESET}")
+        if message:
+            print(f"{YELLOW}{message}{RESET}")
+        return
     detected = ", ".join(
         f"{d['ref']} ({d['kind'][0]}, {d['confidence']})" for d in item["detected"]
     )
@@ -266,6 +323,7 @@ def main() -> None:
     )
     p.add_argument("sermons", nargs="*", help="default: every folder with a candidates.jsonl")
     p.add_argument("--type", help="review only candidates of this type, e.g. quote")
+    p.add_argument("--blind", action="store_true", help="hide detector output and suggestions")
     args = p.parse_args()
 
     root = corpus_dir()
@@ -273,13 +331,16 @@ def main() -> None:
         d.name for d in root.iterdir() if (d / "candidates.jsonl").exists()
     )
     sermons = [Sermon(root / n) for n in names]
-    queue = review_order(sermons, args.type)
+    blind = args.blind or any(s.split == "test" for s in sermons)
+    if blind and any(s.split != "test" for s in sermons) and not args.blind:
+        raise SystemExit("do not review test and dev sermons together; name the sermons")
+    queue = review_order(sermons, args.type, blind)
     total = len(queue)
     if not total:
         raise SystemExit(f"no candidates found under {root}")
 
     done = sum(is_done(item) for _, item in queue)
-    print(f"{done}/{total} done ({', '.join(names)})")
+    print(f"{done}/{total} done ({', '.join(names)}){' [blind]' if blind else ''}")
     pos = next((i for i, (_, item) in enumerate(queue) if not is_done(item)), None)
     if pos is None:
         print("Everything is reviewed. Showing the first item; press q to quit.")
@@ -289,7 +350,7 @@ def main() -> None:
     while True:
         sermon, item = queue[pos]
         done = sum(is_done(it) for _, it in queue)
-        show(sermon, item, pos, total, done, message)
+        show(sermon, item, pos, total, done, message, blind)
         message = ""
         key = read_key()
         if key == "q":
@@ -299,6 +360,23 @@ def main() -> None:
             continue
         if key == "p":
             message = play(sermon, item) or "played"
+            continue
+        if key == "a" and blind:
+            message = "a is off in blind mode: type the refs with f, or r for no reference"
+            continue
+        if key == "n" and blind:
+            try:
+                at = parse_time(input("time of the missed mention (mm:ss): "))
+                refs = parse_refs(input("correct refs (comma separated): "))
+            except (ValueError, EOFError) as e:
+                message = f"not added: {e}"
+                continue
+            new = missed_item(sermon, at, refs)
+            sermon.items.append(new)
+            sermon.save()
+            queue.insert(pos + 1, (sermon, new))
+            total = len(queue)
+            message = f"added {new['id']} at {new['time']}"
             continue
         if key not in ("a", "f", "r", "u"):
             message = f"unknown key {key!r}"

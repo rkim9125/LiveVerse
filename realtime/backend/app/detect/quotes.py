@@ -66,15 +66,24 @@ class QuoteIndex:
         self.korean = _build(ko, _ko_grams) if ko else None
         self.english = _build(en, _en_grams) if en else None
 
-    def _best(self, index: _Index | None, grams: set[str]) -> list[tuple[float, int, VerseKey]]:
-        if index is None or len(grams) < MIN_HITS:
+    def _best(
+        self, index: _Index | None, grams: set[str], min_hits: int = MIN_HITS
+    ) -> list[tuple[float, int, VerseKey]]:
+        if index is None or len(grams) < min_hits:
             return []
         hits: dict[VerseKey, int] = defaultdict(int)
         for g in grams:
             for key in index.postings.get(g, ()):
                 hits[key] += 1
-        scored = [(n / index.grams[k], n, k) for k, n in hits.items() if n >= MIN_HITS]
+        scored = [(n / index.grams[k], n, k) for k, n in hits.items() if n >= min_hits]
         return sorted(scored, reverse=True)[:2]
+
+    def best_coverage(self, text: str, min_hits: int) -> float:
+        """Coverage of the closest verse, for building review candidates."""
+        best = self._best(self.korean, _ko_grams(text), min_hits) or self._best(
+            self.english, _en_grams(text), min_hits
+        )
+        return best[0][0] if best else 0.0
 
     def find(
         self, text: str, spoken: Reference | None = None, announced: bool = False
