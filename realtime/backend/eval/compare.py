@@ -15,6 +15,8 @@ import json
 import os
 from pathlib import Path
 
+from score import LIMIT_DEV, LIMIT_QUOTES
+
 
 def corpus_dir() -> Path:
     return Path(os.environ.get("LIVEVERSE_CORPUS", "~/liveverse-corpus")).expanduser()
@@ -50,14 +52,14 @@ def main() -> None:
     lines = [
         f"# Comparison ({split} set)",
         "",
-        f"- Set: **{split}**. "
-        + (
-            "Rule thresholds were tuned on this set, so these numbers are optimistic."
-            if split == "dev"
-            else "Held out: never used to build rules."
-        ),
+        f"- Set: **{split}**."
+        + ("" if split == "dev" else " Held out: never used to build rules."),
         f"- Labels: {first['labels']} windows, {first['gold_refs']} gold refs",
         "- F1 shown; strict = every labeled mention, dedup = a repeat within 15 s counts as found",
+        "",
+        "Limits:",
+        *([f"- {LIMIT_DEV}"] if split == "dev" else []),
+        f"- {LIMIT_QUOTES}",
         "",
         "| step | commit | no prompt strict | no prompt dedup "
         "| prompt strict | prompt dedup | prompt P / R (strict) |",

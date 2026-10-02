@@ -20,6 +20,7 @@ first, accepts last.
 Usage (from realtime/backend):
     uv run python eval/review_labels.py              # all sermons in the corpus
     uv run python eval/review_labels.py sermon-02    # one sermon
+    uv run python eval/review_labels.py --type quote # only quote-search candidates
 """
 
 from __future__ import annotations
@@ -95,8 +96,13 @@ def is_done(item: dict) -> bool:
     return item.get("label_source") == "user"
 
 
-def review_order(sermons: list[Sermon]) -> list[tuple[Sermon, dict]]:
-    queue = [(s, item) for s in sermons for item in s.items]
+def review_order(sermons: list[Sermon], only_type: str | None = None) -> list[tuple[Sermon, dict]]:
+    queue = [
+        (s, item)
+        for s in sermons
+        for item in s.items
+        if only_type is None or item.get("type") == only_type
+    ]
     queue.sort(key=lambda p: (ORDER.get(p[1].get("decision"), 3), p[0].name, p[1]["t_start"]))
     return queue
 
@@ -259,6 +265,7 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("sermons", nargs="*", help="default: every folder with a candidates.jsonl")
+    p.add_argument("--type", help="review only candidates of this type, e.g. quote")
     args = p.parse_args()
 
     root = corpus_dir()
@@ -266,7 +273,7 @@ def main() -> None:
         d.name for d in root.iterdir() if (d / "candidates.jsonl").exists()
     )
     sermons = [Sermon(root / n) for n in names]
-    queue = review_order(sermons)
+    queue = review_order(sermons, args.type)
     total = len(queue)
     if not total:
         raise SystemExit(f"no candidates found under {root}")

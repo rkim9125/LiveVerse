@@ -60,6 +60,16 @@ def _mention_time(words: list[dict], span: tuple[int, int]) -> tuple[float, floa
     return (start, end) if start is not None else None
 
 
+LIMIT_DEV = (
+    "Dev set: rule thresholds (near-match distances, stop words, announcement "
+    "phrases, the 10 s window, quote matching) were tuned on these sermons, so the "
+    "scores are optimistic."
+)
+LIMIT_QUOTES = (
+    "Quote labels: only quotes that the system itself found were reviewed. Quotes it "
+    "never surfaced are not labeled, so recall may be overestimated."
+)
+
 SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
 DIMMED: Counter[str] = Counter()  # chapter candidates said in passing, per file
 QUOTES: dict[str, QuoteIndex | None] = {"index": None}  # set by --quotes
@@ -289,6 +299,14 @@ def markdown(report: dict) -> str:
         f"- Chapter candidates hidden behind a verse of the same chapter: {t['superseded']}"
         " (still scored, per LABELING.md)",
         f"- Chapter candidates dimmed as said in passing (not counted): {t['dimmed']}",
+        f"- Quote search: {'on' if report.get('quotes') else 'off'}",
+        "",
+        "Limits:",
+    ]
+    if report["split"] == "dev":
+        lines.append(f"- {LIMIT_DEV}")
+    lines.append(f"- {LIMIT_QUOTES}")
+    lines += [
         "",
         "## Detection",
         "",
