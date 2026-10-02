@@ -1,23 +1,21 @@
 import pytest
 
-from app.core.models import HIGH_CONFIDENCE
 from app.detect.normalize import normalize
-from app.detect.parser import parse
+from app.detect.pipeline import detect
 from tests.fixtures import load_cases
 
-ABSOLUTE_CASES = [c for c in load_cases() if c["context"] is None and "relative" not in c["tags"]]
 
-
-@pytest.mark.parametrize("case", ABSOLUTE_CASES, ids=lambda c: c["id"])
-def test_absolute_fixture(case):
-    norm = normalize(case["input"])
-    raws = [m for m in parse(norm, case["mode"]).mentions if m.op == "abs"]
-    assert [str(m.ref) for m in raws] == [e["ref"] for e in case["expect"]]
-    for raw, exp in zip(raws, case["expect"], strict=True):
+@pytest.mark.parametrize("case", load_cases(), ids=lambda c: c["id"])
+def test_fixture(case):
+    mentions = detect(case["input"], lang=case["lang"], mode=case["mode"], context=case["context"])
+    assert [str(m.ref) for m in mentions] == [e["ref"] for e in case["expect"]]
+    for mention, exp in zip(mentions, case["expect"], strict=True):
+        if "kind" in exp:
+            assert mention.kind == exp["kind"]
         if "matched" in exp:
-            assert norm.original_text(raw.start, raw.end) == exp["matched"]
+            assert mention.matched_text == exp["matched"]
         if "confidence" in exp:
-            assert (raw.confidence >= HIGH_CONFIDENCE) == (exp["confidence"] == "high")
+            assert mention.is_high == (exp["confidence"] == "high")
 
 
 @pytest.mark.parametrize(
