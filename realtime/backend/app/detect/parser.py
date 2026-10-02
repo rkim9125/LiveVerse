@@ -14,13 +14,14 @@ from functools import cache
 
 from app.core.models import Mode, Reference
 from app.detect import versification
-from app.detect.books import book_regex, lookup
+from app.detect.books import book_regex, fuzzy_lookup, lookup
 from app.detect.normalize import Normalized
 
 # Confidence for absolute references. Relative ones are scored in context.py.
 CONF_VERSE = 0.9
 CONF_CHAPTER = 0.75
 CONF_FALLBACK = 0.4
+FUZZY_PENALTY = 0.15  # a near-match book name is less certain than an exact one
 
 # How far (in normalized characters) a book name can be from a later "3장"
 # and still apply to it: "요한복음을 펴시면 3장 16절".
@@ -43,6 +44,8 @@ _TOKEN_SPECS = [
     ("EN_CH", r"(?<![a-z])chapters?\s+\d+"),
     ("EN_V", r"(?<![a-z])verses?\s+\d+"),
     ("BOOK", None),  # filled per mode
+    # An unknown word right before a chapter number: maybe a misheard book name.
+    ("NAME", r"(?<![가-힣\d])[가-힣]{2,6}?(?=(?:의|에서|에|을|를|은|는|로)?\s*\d+\s*(?:장|편|:))"),
     ("KO_CH", r"\d+\s*(?:장|편)(?!로|막|짜리|지|안)"),
     ("KO_V", r"\d+\s*절(?!기)"),
     ("NUM", r"\d+(?:th)?"),
@@ -87,6 +90,7 @@ class RawMention:
     open_ended: bool = False
     last_verse: bool = False
     confidence: float = 0.0
+    fuzzy_from: str | None = None
 
 
 @dataclass
@@ -248,7 +252,11 @@ def make_absolute(book: str, spec: _Spec) -> tuple[Reference, float] | None:
     return Reference(book, chapter, v1, v2, spec.open_ended), CONF_VERSE
 
 
-def parse(norm: Normalized, mode: Mode = "spoken") -> ParseResult:
+def parse(
+    norm: Normalized, mode: Mode = "spoken", known_books: frozenset[str] = frozenset()
+) -> ParseResult:
+    """known_books: books already shown in this service. They allow looser
+    near matches for misheard names."""
     text = norm.text
     reader = _Reader(norm, tokenize(text, mode), mode)
     toks = reader.toks
@@ -257,12 +265,20 @@ def parse(norm: Normalized, mode: Mode = "spoken") -> ParseResult:
     suppress = False  # inside a hymn mention ("찬송가 305장 3절")
     pending: Token | None = None  # a book name not yet followed by a chapter
 
-    def emit_abs(book: str, spec: _Spec, start: int, end_tok: int) -> bool:
+    known = set(known_books)
+
+    def emit_abs(
+        book: str, spec: _Spec, start: int, end_tok: int, fuzzy_from: str | None = None
+    ) -> bool:
         made = make_absolute(book, spec)
         if made is None:
             return False
         ref, conf = made
-        out.append(RawMention("abs", start, toks[end_tok - 1].end, ref=ref, confidence=conf))
+        if fuzzy_from:
+            conf -= FUZZY_PENALTY
+        end = toks[end_tok - 1].end
+        out.append(RawMention("abs", start, end, ref=ref, confidence=conf, fuzzy_from=fuzzy_from))
+        known.add(book)
         return True
 
     i = 0
@@ -291,6 +307,17 @@ def parse(norm: Normalized, mode: Mode = "spoken") -> ParseResult:
                 i, pending = spec.next_index, None
                 continue
             pending = t if book else None
+            i += 1
+            continue
+        if t.type == "NAME":
+            if not suppress:
+                book = fuzzy_lookup(t.text, frozenset(known))
+                j = i + 1
+                if book and reader.adjacent(i, j):
+                    spec = reader.chapter_spec(j)
+                    if spec and emit_abs(book, spec, t.start, spec.next_index, fuzzy_from=t.text):
+                        i, pending = spec.next_index, None
+                        continue
             i += 1
             continue
         if suppress:

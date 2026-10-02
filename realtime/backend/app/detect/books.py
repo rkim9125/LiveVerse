@@ -531,12 +531,29 @@ def lookup(alias: str, mode: Mode = "spoken") -> str | None:
     return None
 
 
+# Speech recognizers put spaces inside book names only at these joins:
+# 요한 복음, 고린도 전서, 요한 계시록, 사도 행전, 예레미야 애가, 사무엘 상, 요한 일 서.
+_KO_BREAKS = ("복음", "전서", "후서", "계시록", "행전", "애가")
+_KO_UPPER_LOWER = ("사무엘", "열왕기", "역대")
+
+
 def _ko_pattern(name: str) -> str:
-    chars = []
-    for i, ch in enumerate(name):
-        is_numbered = ch in _KO_NUMERAL and name[i + 1 : i + 2] == "서" and i == len(name) - 2
-        chars.append(f"[{ch}{_KO_NUMERAL[ch]}]" if is_numbered else re.escape(ch))
-    return r"\s*".join(chars)
+    """Pattern for a Korean book name.
+
+    The name must start a word (no Hangul right before it), so 나오미가 does not
+    match 미가 and 돌아가 does not match 아가. Spaces are allowed only at the joins
+    above, so "있어요 나오미" does not match 요나.
+    """
+    numbered = re.fullmatch(r"(요한)([일이삼])서", name)
+    if numbered:
+        n = numbered.group(2)
+        body = rf"요한\s*[{n}{_KO_NUMERAL[n]}]\s*서"
+    elif name[:-1] in _KO_UPPER_LOWER:
+        body = re.escape(name[:-1]) + r"\s*" + name[-1]
+    else:
+        brk = next((b for b in _KO_BREAKS if name.endswith(b) and len(name) > len(b)), None)
+        body = re.escape(name[: -len(brk)]) + r"\s*" + brk if brk else re.escape(name)
+    return r"(?<![가-힣])" + body
 
 
 def _en_pattern(name: str) -> str:
@@ -586,3 +603,86 @@ def book_regex(mode: Mode) -> re.Pattern[str]:
             alts.append((len(key), pat))
     alts.sort(key=lambda a: -a[0])
     return re.compile("|".join(p for _, p in alts))
+
+
+# ── Near matches for misheard book names ──
+
+_CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+_JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+_JONG = " ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ"
+
+# Thresholds are distance / jamo length of the book name. Tuned on the dev set
+# (sermon-01, sermon-02): misheard names were 0.12 to 0.40, the common word 여기
+# was 0.40 from 욥기.
+FUZZY_SURE = 0.25
+FUZZY_MAX = 0.4
+BOOK_LIKE = 0.45  # at or below this, an unknown word is treated as an unconfirmed name
+# (0.45 rather than 0.5 keeps 모습 (0.50 from 아모스) out, as in "교회의 모습은 3장 15절")
+
+# Common words that sit right before a chapter number and look like book names.
+NOT_BOOK_NAMES = frozenset(
+    {"여기", "거기", "저기", "이제", "오늘", "성경", "본문", "다음", "마지막", "같은", "처음"}
+)
+
+
+def jamo(text: str) -> list[str]:
+    """Split Hangul syllables into jamo: 룻기 -> ㄹ ㅜ ㅅ ㄱ ㅣ."""
+    out: list[str] = []
+    for ch in text:
+        code = ord(ch) - 0xAC00
+        if 0 <= code < 11172:
+            out += [_CHO[code // 588], _JUNG[(code % 588) // 28]]
+            if code % 28:
+                out.append(_JONG[code % 28])
+        else:
+            out.append(ch)
+    return out
+
+
+def _edit_distance(a: list[str], b: list[str]) -> int:
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
+@cache
+def nearest_books(word: str) -> tuple[tuple[float, str], tuple[float, str]]:
+    """The two closest Korean book names as (ratio, abbrev), closest first."""
+    w = jamo(word)
+    scored = sorted((_edit_distance(w, jamo(b.ko)) / len(jamo(b.ko)), b.abbrev) for b in BOOKS)
+    return scored[0], scored[1]
+
+
+def fuzzy_lookup(word: str, known_books: frozenset[str] = frozenset()) -> str | None:
+    """Resolve a misheard Korean book name, or None.
+
+    Only call this for a word followed by a chapter number. Close matches are
+    accepted outright. Looser ones only for a book already shown in this service,
+    with the same number of syllables and the same first consonant.
+    """
+    if word in NOT_BOOK_NAMES or not re.fullmatch(r"[가-힣]{2,6}", word):
+        return None
+    (ratio, abbrev), (second, _) = nearest_books(word)
+    if second == ratio:
+        return None  # two books equally close
+    if ratio <= FUZZY_SURE:
+        return abbrev
+    book = BY_ABBREV[abbrev]
+    if (
+        ratio <= FUZZY_MAX
+        and abbrev in known_books
+        and len(word) == len(book.ko)
+        and jamo(word)[0] == jamo(book.ko)[0]
+    ):
+        return abbrev
+    return None
+
+
+def looks_like_book(word: str) -> bool:
+    """An unknown word close enough to a book name that it is probably a misheard one."""
+    if word in NOT_BOOK_NAMES or not re.fullmatch(r"[가-힣]{2,6}", word):
+        return False
+    return nearest_books(word)[0][0] <= BOOK_LIKE

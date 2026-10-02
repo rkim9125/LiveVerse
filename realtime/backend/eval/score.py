@@ -66,11 +66,13 @@ def predictions(transcript: Path) -> list[tuple[float, float, str]]:
     """
     segments = json.loads(transcript.read_text(encoding="utf-8"))["segments"]
     context = None
+    known_books: set[str] = set()  # books "shown" so far, as if the interpreter clicked each
     out = []
     for seg in segments:
         words = seg.get("words") or []
         text = "".join(w["word"] for w in words) if words else seg["text"]
-        mentions = detect(text, context=context)
+        mentions = detect(text, context=context, known_books=known_books)
+        known_books.update(m.ref.book for m in mentions)
         for m in mentions:
             when = _mention_time(words, m.span) if words else None
             start, end = when or (seg["start"], seg["end"])

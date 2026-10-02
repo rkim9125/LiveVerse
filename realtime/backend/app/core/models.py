@@ -68,6 +68,7 @@ class Mention:
     matched_text: str
     span: tuple[int, int]  # character offsets into the original segment
     confidence: float
+    fuzzy_from: str | None = None  # the misheard word, when the book was a near match
 
     @property
     def is_high(self) -> bool:

@@ -117,3 +117,21 @@
 {"id": "en-neg-004", "lang": "en", "mode": "spoken", "input": "I have three sons and sixteen grandchildren", "context": null, "expect": [], "tags": ["negative"]}
 {"id": "en-neg-005", "lang": "en", "mode": "spoken", "input": "hymn 305 verse 3", "context": null, "expect": [], "tags": ["negative"]}
 {"id": "en-neg-006", "lang": "en", "mode": "spoken", "input": "a remarkable 3 days", "context": null, "expect": [], "tags": ["negative"]}
+{"id": "ko-fuzzy-001", "lang": "ko", "mode": "spoken", "input": "룩기 2장 7절을 보겠습니다", "context": null, "expect": [{"ref": "rt 2:7", "kind": "absolute"}], "tags": ["fuzzy"]}
+{"id": "ko-fuzzy-002", "lang": "ko", "mode": "spoken", "input": "레이기 25장 25절", "context": null, "expect": [{"ref": "lv 25:25"}], "tags": ["fuzzy"]}
+{"id": "ko-fuzzy-003", "lang": "ko", "mode": "spoken", "input": "야고버서 1장 5절에 보면", "context": null, "expect": [{"ref": "jm 1:5"}], "tags": ["fuzzy"]}
+{"id": "ko-fuzzy-004", "lang": "ko", "mode": "spoken", "input": "빌리뽀서 2장 5절부터 보면", "context": null, "expect": [{"ref": "ph 2:5"}], "tags": ["fuzzy"]}
+{"id": "ko-fuzzy-005", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절", "context": null, "expect": [], "tags": ["fuzzy", "negative"]}
+{"id": "ko-fuzzy-006", "lang": "ko", "mode": "spoken", "input": "루키 2장 7절", "context": "rt 2:1", "expect": [{"ref": "rt 2:7"}], "tags": ["fuzzy", "known-book"]}
+{"id": "ko-fuzzy-007", "lang": "ko", "mode": "spoken", "input": "여기 2장 5절에 보면", "context": "rt 2:1", "expect": [{"ref": "rt 2:5"}], "tags": ["fuzzy", "stopword"]}
+{"id": "ko-fuzzy-008", "lang": "ko", "mode": "spoken", "input": "여기 3장을 보시면", "context": null, "expect": [], "tags": ["fuzzy", "negative", "stopword"]}
+{"id": "ko-fuzzy-009", "lang": "ko", "mode": "spoken", "input": "복음 3장", "context": null, "expect": [], "tags": ["fuzzy", "negative", "tie"]}
+{"id": "ko-psalm-stt-001", "lang": "ko", "mode": "spoken", "input": "10편 139편 1절부터 4절까지 읽겠습니다", "context": null, "expect": [{"ref": "ps 139:1-4"}], "tags": ["psalm-misheard"]}
+{"id": "ko-psalm-stt-002", "lang": "ko", "mode": "spoken", "input": "10편 73편입니다", "context": null, "expect": [{"ref": "ps 73"}], "tags": ["psalm-misheard"]}
+{"id": "ko-psalm-stt-003", "lang": "ko", "mode": "spoken", "input": "십편 백삼십구편을 보겠습니다", "context": null, "expect": [{"ref": "ps 139"}], "tags": ["psalm-misheard", "numerals"]}
+{"id": "ko-psalm-stt-004", "lang": "ko", "mode": "spoken", "input": "10편에 보면 이렇게 되어 있어요", "context": null, "expect": [], "tags": ["psalm-misheard", "negative"]}
+{"id": "ko-psalm-stt-005", "lang": "ko", "mode": "spoken", "input": "시편 10편에 보면", "context": null, "expect": [{"ref": "ps 10"}], "tags": ["psalm-misheard"]}
+{"id": "ko-inword-001", "lang": "ko", "mode": "spoken", "input": "나오미가 2장에서 말합니다", "context": null, "expect": [], "tags": ["in-word", "negative"]}
+{"id": "ko-inword-002", "lang": "ko", "mode": "spoken", "input": "이제 돌아가 볼까요 4장", "context": null, "expect": [], "tags": ["in-word", "negative"]}
+{"id": "ko-inword-003", "lang": "ko", "mode": "spoken", "input": "그렇게 있어요 나오미가 말하기를", "context": null, "expect": [], "tags": ["in-word", "negative"]}
+{"id": "ko-inword-004", "lang": "ko", "mode": "spoken", "input": "함께 살아가는 3장의 이야기", "context": null, "expect": [], "tags": ["in-word", "negative"]}
