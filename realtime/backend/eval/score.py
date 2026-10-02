@@ -42,14 +42,35 @@ def corpus_dir() -> Path:
     return Path(os.environ.get("LIVEVERSE_CORPUS", "~/liveverse-corpus")).expanduser()
 
 
+def _mention_time(words: list[dict], span: tuple[int, int]) -> tuple[float, float] | None:
+    """Time of a mention from the words its character span covers."""
+    pos, start, end = 0, None, None
+    for w in words:
+        w_start, w_end = pos, pos + len(w["word"])
+        if w_end > span[0] and w_start < span[1]:
+            start = w["start"] if start is None else start
+            end = w["end"]
+        pos = w_end
+    return (start, end) if start is not None else None
+
+
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
+    """Detections with the time of the words they matched.
+
+    Segments can be up to 30 s long, so the segment time alone could match a
+    detection to the wrong label window. Word timestamps place it exactly.
+    """
     segments = json.loads(transcript.read_text(encoding="utf-8"))["segments"]
     context = None
     out = []
     for seg in segments:
-        mentions = detect(seg["text"], context=context)
+        words = seg.get("words") or []
+        text = "".join(w["word"] for w in words) if words else seg["text"]
+        mentions = detect(text, context=context)
         for m in mentions:
-            out.append((seg["start"], seg["end"], str(m.ref)))
+            when = _mention_time(words, m.span) if words else None
+            start, end = when or (seg["start"], seg["end"])
+            out.append((start, end, str(m.ref)))
         if mentions:
             context = mentions[-1].ref
     return out

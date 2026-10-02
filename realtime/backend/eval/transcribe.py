@@ -19,6 +19,7 @@ Usage (from realtime/backend):
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import subprocess
@@ -32,6 +33,26 @@ from app.detect.books import BOOKS  # noqa: E402
 
 DEFAULT_MODEL = "mlx-community/whisper-large-v3-turbo"
 AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".mp4", ".webm"}
+
+# Whisper keeps at most n_text_ctx // 2 - 1 = 223 prompt tokens and drops the front
+# of anything longer. All 66 names take 267 tokens, so these rarely preached short
+# books are left out to make the rest fit (217 tokens).
+PROMPT_MAX_TOKENS = 223
+PROMPT_LEFT_OUT = [
+    "오바댜",
+    "나훔",
+    "하박국",
+    "스바냐",
+    "학개",
+    "요엘",
+    "빌레몬서",
+    "유다서",
+    "요한이서",
+    "요한삼서",
+    "아가",
+    "스가랴",
+    "예레미야애가",
+]
 
 
 def corpus_dir() -> Path:
@@ -70,7 +91,33 @@ def wav_seconds(path: Path) -> float:
 
 
 def book_prompt() -> str:
-    return "성경 본문: " + ", ".join(b.ko for b in BOOKS) + "."
+    return " ".join(b.ko for b in BOOKS if b.ko not in PROMPT_LEFT_OUT)
+
+
+def prompt_tokens(prompt: str) -> int:
+    from mlx_whisper.tokenizer import get_tokenizer
+
+    tokenizer = get_tokenizer(True, num_languages=100, language="ko", task="transcribe")
+    return len(tokenizer.encode(" " + prompt.strip()))
+
+
+def carry_prompt_to_every_window(prompt: str) -> None:
+    """Use the prompt for every 30 s window, not only the first.
+
+    mlx-whisper 0.4.3 resets the prompt after the first window when
+    condition_on_previous_text is False, and has no carry_initial_prompt option.
+    The transcribe module builds DecodingOptions for each window, so wrap it and
+    fill in the prompt whenever the window has none.
+    """
+    module = importlib.import_module("mlx_whisper.transcribe")
+    original = module.DecodingOptions
+
+    def options(*args, **kwargs):
+        if not kwargs.get("prompt"):
+            kwargs["prompt"] = prompt
+        return original(*args, **kwargs)
+
+    module.DecodingOptions = options
 
 
 def fmt_time(t: float) -> str:
@@ -86,7 +133,9 @@ def main() -> None:
     p.add_argument("--start", type=float, help="clip start in seconds")
     p.add_argument("--duration", type=float, help="clip length in seconds")
     p.add_argument("--name", default="", help="output prefix, e.g. 'sample' -> sample.whisper.json")
-    p.add_argument("--prompt", action="store_true", help="pass Bible book names as initial_prompt")
+    p.add_argument(
+        "--prompt", action="store_true", help="prompt every window with Bible book names"
+    )
     p.add_argument("--model", default=DEFAULT_MODEL)
     args = p.parse_args()
 
@@ -103,6 +152,13 @@ def main() -> None:
     convert_s = time.perf_counter() - t0
     audio_s = wav_seconds(wav)
 
+    prompt = book_prompt() if args.prompt else None
+    n_prompt_tokens = prompt_tokens(prompt) if prompt else 0
+    if n_prompt_tokens > PROMPT_MAX_TOKENS:
+        raise SystemExit(f"prompt is {n_prompt_tokens} tokens, limit {PROMPT_MAX_TOKENS}")
+    if prompt:
+        carry_prompt_to_every_window(prompt)
+
     t0 = time.perf_counter()
     result = mlx_whisper.transcribe(
         str(wav),
@@ -110,7 +166,6 @@ def main() -> None:
         language="ko",
         word_timestamps=True,
         condition_on_previous_text=False,  # avoids repetition loops on long recordings
-        initial_prompt=book_prompt() if args.prompt else None,
     )
     transcribe_s = time.perf_counter() - t0
 
@@ -139,6 +194,8 @@ def main() -> None:
         "output": f"{prefix}{variant}.json",
         "model": args.model,
         "prompt": args.prompt,
+        "prompt_mode": "every-window" if args.prompt else None,
+        "prompt_tokens": n_prompt_tokens,
         "clip_start": args.start,
         "audio_seconds": round(audio_s, 1),
         "convert_seconds": round(convert_s, 1),
