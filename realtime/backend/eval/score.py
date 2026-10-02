@@ -89,8 +89,12 @@ def predictions(transcript: Path) -> list[tuple[float, float, str]]:
 
 
 def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegment]:
-    """detect() over the transcript. The context is the last shown candidate, as if
-    the interpreter clicked every one that was not dimmed."""
+    """detect() over the transcript.
+
+    Relative references ("2절") follow where the preacher is: the last reference
+    said, dimmed or not ("이제 2장에 보면" moves back to chapter 2 even though it is
+    not worth displaying). Books count as shown only for candidates that were not
+    dimmed, as if the interpreter clicked each of those."""
     context = None
     known_books: set[str] = set()
     timeline = []
@@ -103,9 +107,9 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
             when = _mention_time(words, m.span) if words else None
             start, end = when or (seg["start"], seg["end"])
             timed.mentions.append((m, start, end))
+            context = m.ref
             if (i, j) not in dimmed:
                 known_books.add(m.ref.book)
-                context = m.ref
         timeline.append(timed)
     return timeline
 
