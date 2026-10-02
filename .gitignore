@@ -1,0 +1,31 @@
+# ── Copyrighted Bible data: never commit ──
+# Everything under data/ is ignored except the public-domain sample.
+data/*
+!data/sample/
+!data/sample/**
+
+# Source / working files in the project root
+*.json
+*.json.bak
+*.bak
+*.txt
+NKJV*
+nkjv*
+ko_ko*
+bible_data*
+b_25.html
+
+# Allowed exceptions
+!requirements.txt
+!package.json
+
+# Local settings / OS
+.claude/settings.local.json
+.DS_Store
+
+# Python
+__pycache__/
+
+# Internal notes
+PLAN.md
+validation_report.md

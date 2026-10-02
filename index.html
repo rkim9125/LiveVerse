@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>성경 구절 조회</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f8f6f1;
+    --card: #ffffff;
+    --border: #e0d9cc;
+    --accent: #4a6741;
+    --accent2: #7a9e6d;
+    --text: #2c2416;
+    --muted: #8a7d68;
+    --ko: #1a3a5c;
+    --en: #3a1a0a;
+    --verse-num: #b0956e;
+    --shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .5px; }
+  header .sub { font-size: .75rem; opacity: .75; }
+
+  .search-bar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    gap: 10px;
+    position: sticky;
+    top: 49px;
+    z-index: 99;
+  }
+
+  #input {
+    flex: 1;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 1.05rem;
+    outline: none;
+    background: var(--bg);
+    transition: border-color .2s;
+    color: var(--text);
+  }
+  #input:focus { border-color: var(--accent2); }
+  #input::placeholder { color: var(--muted); font-size: .9rem; }
+
+  #btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  #btn:hover { background: #3a5533; }
+  #btn:active { background: #2d4428; }
+
+  main { flex: 1; padding: 18px 20px 40px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+  .hint {
+    color: var(--muted);
+    font-size: .88rem;
+    text-align: center;
+    margin-top: 60px;
+    line-height: 1.9;
+  }
+  .hint strong { color: var(--accent); }
+
+  .error {
+    background: #fff3f0;
+    border: 1px solid #f5c6c0;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #a0302a;
+    margin-top: 16px;
+  }
+
+  .result-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .result-ref {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .result-books {
+    font-size: .9rem;
+    color: var(--muted);
+  }
+
+  .verses { display: flex; flex-direction: column; gap: 0; }
+
+  .verse {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr 1fr;
+    gap: 0 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .verse:last-child { border-bottom: none; }
+
+  .vnum {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--verse-num);
+    padding-top: 2px;
+    text-align: right;
+    user-select: none;
+  }
+
+  .ko-text {
+    font-size: .975rem;
+    line-height: 1.7;
+    color: var(--ko);
+    word-break: keep-all;
+  }
+  .en-text {
+    font-size: .925rem;
+    line-height: 1.7;
+    color: var(--en);
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  .empty { opacity: .35; font-style: italic; }
+
+  .col-labels {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr 1fr;
+    gap: 0 14px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent2);
+  }
+  .col-label {
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+  }
+  .col-label:first-child { text-align: right; }
+
+  @media (max-width: 600px) {
+    header { padding: 10px 14px; }
+    .search-bar { padding: 10px 14px; top: 45px; }
+    #input { font-size: .95rem; padding: 8px 12px; }
+    #btn { padding: 8px 14px; font-size: .9rem; }
+    main { padding: 14px 14px 40px; }
+
+    .verse {
+      grid-template-columns: 2rem 1fr;
+      grid-template-rows: auto auto;
+    }
+    .vnum { grid-row: 1; }
+    .ko-text { grid-row: 1; font-size: .92rem; }
+    .en-text { grid-column: 2; grid-row: 2; font-size: .85rem; padding-bottom: 6px; border-bottom: 1px dashed var(--border); margin-bottom: 2px; }
+
+    .col-labels {
+      grid-template-columns: 2rem 1fr;
+    }
+    .col-labels .col-label:last-child { display: none; }
+  }
+
+  .demo-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 6px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+  }
+
+  /* Data without a Korean column (e.g. the KJV demo): single text column */
+  .en-only .verse,
+  .en-only .col-labels { grid-template-columns: 2.4rem 1fr; }
+  .en-only .ko-text,
+  .en-only .col-labels .col-label:nth-child(2) { display: none; }
+  @media (max-width: 600px) {
+    .en-only .verse,
+    .en-only .col-labels { grid-template-columns: 2rem 1fr; }
+    .en-only .en-text { grid-row: 1; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+    .en-only .col-labels .col-label:last-child { display: block; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>성경 구절 조회</h1>
+    <div class="sub" id="sub">Bible Verse Lookup</div>
+  </div>
+</header>
+
+<div class="search-bar">
+  <input id="input" type="text" placeholder="요 3:16 / John 3:16 / Jn 3:16 / 시 23 / Ps 23:1-6" autocomplete="off" autocorrect="off" spellcheck="false">
+  <button id="btn" onclick="lookup()">조회</button>
+</div>
+
+<main id="main">
+  <div class="hint">
+    <strong>입력 예시</strong><br>
+    요 3:16 &nbsp;·&nbsp; 요한복음 3:16 &nbsp;·&nbsp; John 3:16 &nbsp;·&nbsp; Jn 3:16<br>
+    시 23 &nbsp;·&nbsp; Ps 23:1-6 &nbsp;·&nbsp; 롬 8:28 &nbsp;·&nbsp; Rom 8:28<br>
+    창 1:1 &nbsp;·&nbsp; Gen 1:1 &nbsp;·&nbsp; 계 22:20 &nbsp;·&nbsp; Rev 22:20
+  </div>
+</main>
+
+<script>
+
+// Bible text is not bundled: data/bible_data.js (local, gitignored) is tried first,
+// falling back to the public-domain KJV in data/sample/kjv.js.
+// Loaded via <script> rather than fetch() so the page still works from file://.
+const BOOKS = {};
+let META = null;
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function initData() {
+  const data = window.BIBLE_DATA;
+  META = data.meta;
+  data.books.forEach(b => { BOOKS[b.a] = b; });
+
+  const sub = document.getElementById('sub');
+  sub.textContent = 'Bible Verse Lookup · ' + META.title;
+  if (META.demo) {
+    const badge = document.createElement('span');
+    badge.className = 'demo-badge';
+    badge.textContent = 'DEMO';
+    sub.appendChild(badge);
+  }
+  if (!META.langs.includes('ko')) document.getElementById('main').classList.add('en-only');
+}
+
+loadScript('data/bible_data.js')
+  .catch(() => loadScript('data/sample/kjv.js'))
+  .then(initData)
+  .catch(() => {
+    document.getElementById('main').innerHTML =
+      '<div class="error">성경 데이터를 불러오지 못했습니다.<br>data/sample/kjv.js 파일을 확인하세요.</div>';
+  });
+
+// Comprehensive lookup table
+const BOOK_LOOKUP = {
+  // English full names
+  'genesis':'gn','exodus':'ex','leviticus':'lv','numbers':'nm','deuteronomy':'dt',
+  'joshua':'js','judges':'jud','ruth':'rt',
+  '1samuel':'1sm','2samuel':'2sm','1kings':'1kgs','2kings':'2kgs',
+  '1samuel':'1sm','2samuel':'2sm',
+  '1chronicles':'1ch','2chronicles':'2ch','ezra':'ezr','nehemiah':'ne','esther':'et',
+  'job':'job','psalms':'ps','psalm':'ps','proverbs':'prv','ecclesiastes':'ec',
+  'songofsolomon':'so','songofsongs':'so','songs':'so',
+  'isaiah':'is','jeremiah':'jr','lamentations':'lm','ezekiel':'ez','daniel':'dn',
+  'hosea':'ho','joel':'jl','amos':'am','obadiah':'ob','jonah':'jn','micah':'mi',
+  'nahum':'na','habakkuk':'hk','zephaniah':'zp','haggai':'hg','zechariah':'zc','malachi':'ml',
+  'matthew':'mt','mark':'mk','luke':'lk','john':'jo',
+  'acts':'act','actoftheapostles':'act','actsoftheapostles':'act',
+  'romans':'rm','1corinthians':'1co','2corinthians':'2co','galatians':'gl',
+  'ephesians':'eph','philippians':'ph','colossians':'cl',
+  '1thessalonians':'1ts','2thessalonians':'2ts','1timothy':'1tm','2timothy':'2tm',
+  'titus':'tt','philemon':'phm','hebrews':'hb','james':'jm',
+  '1peter':'1pe','2peter':'2pe','1john':'1jo','2john':'2jo','3john':'3jo',
+  'jude':'jd','revelation':'re',
+
+  // English abbreviations
+  'gen':'gn','exo':'ex','ex':'ex','lev':'lv','lv':'lv','num':'nm','numb':'nm','nm':'nm',
+  'deu':'dt','deut':'dt','dt':'dt',
+  'josh':'js','jos':'js','jsh':'js','js':'js',
+  'judg':'jud','jdg':'jud','jdgs':'jud',
+  'rut':'rt','rt':'rt',
+  '1sa':'1sm','1sam':'1sm','1sm':'1sm',
+  '2sa':'2sm','2sam':'2sm','2sm':'2sm',
+  '1ki':'1kgs','1kgs':'1kgs','1kin':'1kgs','1kg':'1kgs',
+  '2ki':'2kgs','2kgs':'2kgs','2kin':'2kgs','2kg':'2kgs',
+  '1ch':'1ch','1chr':'1ch','1chron':'1ch',
+  '2ch':'2ch','2chr':'2ch','2chron':'2ch',
+  'ezr':'ezr','neh':'ne','ne':'ne','est':'et','esth':'et','et':'et',
+  'psa':'ps','pss':'ps','ps':'ps',
+  'pro':'prv','prov':'prv','prv':'prv',
+  'ecc':'ec','eccl':'ec','ec':'ec','qoh':'ec',
+  'sos':'so','sol':'so','son':'so','so':'so',
+  'isa':'is','is':'is',
+  'jer':'jr','jr':'jr',
+  'lam':'lm','lm':'lm',
+  'eze':'ez','ezek':'ez','ez':'ez',
+  'dan':'dn','dn':'dn',
+  'hos':'ho','ho':'ho',
+  'joe':'jl','jl':'jl',
+  'amo':'am','am':'am',
+  'oba':'ob','obad':'ob','ob':'ob',
+  'jon':'jn','jonah':'jn',  // English Jon/Jonah → jn
+  'mic':'mi','mi':'mi',
+  'nah':'na',
+  'hab':'hk','hk':'hk',
+  'zep':'zp','zeph':'zp','zp':'zp',
+  'hag':'hg','hg':'hg',
+  'zec':'zc','zech':'zc','zc':'zc',
+  'mal':'ml','ml':'ml',
+  'mat':'mt','matt':'mt','mt':'mt',
+  'mar':'mk','mrk':'mk','mk':'mk',
+  'luk':'lk','lk':'lk',
+  'joh':'jo','jhn':'jo',
+  'jn':'jo',   // English jn → John (not Jonah)
+  'act':'act',
+  'rom':'rm','ro':'rm','rm':'rm',
+  '1co':'1co','1cor':'1co',
+  '2co':'2co','2cor':'2co',
+  'gal':'gl','gl':'gl',
+  'eph':'eph',
+  'phi':'ph','phil':'ph','php':'ph','ph':'ph',
+  'col':'cl','cl':'cl',
+  '1th':'1ts','1the':'1ts','1thes':'1ts','1ths':'1ts','1thess':'1ts','1ts':'1ts',
+  '2th':'2ts','2the':'2ts','2thes':'2ts','2ths':'2ts','2thess':'2ts','2ts':'2ts',
+  '1ti':'1tm','1tim':'1tm','1tm':'1tm',
+  '2ti':'2tm','2tim':'2tm','2tm':'2tm',
+  'tit':'tt','tt':'tt',
+  'phm':'phm','phlm':'phm',
+  'heb':'hb','hb':'hb',
+  'jam':'jm','jas':'jm','jm':'jm',
+  '1pe':'1pe','1pet':'1pe',
+  '2pe':'2pe','2pet':'2pe',
+  '1jn':'1jo','1jo':'1jo',
+  '2jn':'2jo','2jo':'2jo',
+  '3jn':'3jo','3jo':'3jo',
+  'jud':'jd','jude':'jd','jd':'jd',
+  'rev':'re','re':'re','apoc':'re',
+
+  // Korean abbreviations
+  '창':'gn','출':'ex','레':'lv','민':'nm','신':'dt',
+  '수':'js','삿':'jud','룻':'rt',
+  '삼상':'1sm','삼하':'2sm','왕상':'1kgs','왕하':'2kgs',
+  '대상':'1ch','대하':'2ch','스':'ezr','느':'ne','에':'et',
+  '욥':'job','시':'ps','잠':'prv','전':'ec','아':'so',
+  '사':'is','렘':'jr','애':'lm','겔':'ez','단':'dn',
+  '호':'ho','욜':'jl','암':'am','옵':'ob','욘':'jn',
+  '미':'mi','나':'na','합':'hk','습':'zp','학':'hg','슥':'zc','말':'ml',
+  '마':'mt','막':'mk','눅':'lk','요':'jo','행':'act',
+  '롬':'rm','고전':'1co','고후':'2co','갈':'gl','엡':'eph',
+  '빌':'ph','골':'cl','살전':'1ts','살후':'2ts',
+  '딤전':'1tm','딤후':'2tm','딛':'tt','몬':'phm','히':'hb',
+  '약':'jm','벧전':'1pe','벧후':'2pe',
+  '요일':'1jo','요이':'2jo','요삼':'3jo','유':'jd','계':'re',
+
+  // Korean full names
+  '창세기':'gn','출애굽기':'ex','레위기':'lv','민수기':'nm','신명기':'dt',
+  '여호수아':'js','사사기':'jud','룻기':'rt',
+  '사무엘상':'1sm','사무엘하':'2sm','열왕기상':'1kgs','열왕기하':'2kgs',
+  '역대상':'1ch','역대하':'2ch','에스라':'ezr','느헤미야':'ne','에스더':'et',
+  '욥기':'job','시편':'ps','잠언':'prv','전도서':'ec','아가':'so',
+  '이사야':'is','예레미야':'jr','예레미야애가':'lm','에스겔':'ez','다니엘':'dn',
+  '호세아':'ho','요엘':'jl','아모스':'am','오바댜':'ob','요나':'jn',
+  '미가':'mi','나훔':'na','하박국':'hk','스바냐':'zp','학개':'hg','스가랴':'zc','말라기':'ml',
+  '마태복음':'mt','마가복음':'mk','누가복음':'lk','요한복음':'jo','사도행전':'act',
+  '로마서':'rm','고린도전서':'1co','고린도후서':'2co','갈라디아서':'gl',
+  '에베소서':'eph','빌립보서':'ph','골로새서':'cl',
+  '데살로니가전서':'1ts','데살로니가후서':'2ts',
+  '디모데전서':'1tm','디모데후서':'2tm','디도서':'tt','빌레몬서':'phm',
+  '히브리서':'hb','야고보서':'jm','베드로전서':'1pe','베드로후서':'2pe',
+  '요한일서':'1jo','요한이서':'2jo','요한삼서':'3jo','유다서':'jd','요한계시록':'re'
+};
+
+function parseChVerse(s) {
+  // "3:16-18" or "3:16"
+  let m = s.match(/^(\d+):(\d+)(?:-(\d+))?$/);
+  if (m) return { ch: +m[1], v1: +m[2], v2: m[3] ? +m[3] : null };
+  // "3 16 18" or "3 16-18" or "3 16"
+  m = s.match(/^(\d+)\s+(\d+)(?:\s*-\s*(\d+)|\s+(\d+))?$/);
+  if (m) return { ch: +m[1], v1: +m[2], v2: m[3] ? +m[3] : (m[4] ? +m[4] : null) };
+  // just "3"
+  m = s.match(/^(\d+)$/);
+  if (m) return { ch: +m[1], v1: null, v2: null };
+  return null;
+}
+
+function parseRef(raw) {
+  raw = raw.trim();
+  raw = raw.replace(/\s*[：:]\s*/g, ':');
+  raw = raw.replace(/\s*[–—~～]\s*/g, '-');
+
+  const tokens = raw.split(/\s+/);
+  // Try longest-first book prefix (up to 4 tokens), need at least 1 token after for chapter
+  const maxBL = Math.min(tokens.length - 1, 4);
+  for (let bl = maxBL; bl >= 1; bl--) {
+    const bookRaw = tokens.slice(0, bl).join(' ');
+    const abbrev = resolveBook(bookRaw);
+    if (!abbrev) continue;
+    const rest = tokens.slice(bl).join(' ').trim();
+    if (!rest) continue;
+    const parsed = parseChVerse(rest);
+    if (parsed) return { abbrev, ...parsed };
+  }
+  return null;
+}
+
+function resolveBook(raw) {
+  // Normalize: lowercase, remove spaces for English, keep Korean
+  const hasKorean = /[가-힣]/.test(raw);
+  
+  if (hasKorean) {
+    // Try exact match first
+    if (BOOK_LOOKUP[raw]) return BOOK_LOOKUP[raw];
+    // Try removing trailing spaces
+    const trimmed = raw.trim();
+    if (BOOK_LOOKUP[trimmed]) return BOOK_LOOKUP[trimmed];
+    return null;
+  }
+  
+  // English: normalize
+  const norm = raw.toLowerCase().replace(/\s+/g, '').replace(/[.\-]/g, '');
+  if (BOOK_LOOKUP[norm]) return BOOK_LOOKUP[norm];
+  
+  // Try with original casing normalized differently
+  const normSpace = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (BOOK_LOOKUP[normSpace]) return BOOK_LOOKUP[normSpace];
+  
+  return null;
+}
+
+function getVerses(abbrev, ch, v1, v2) {
+  const book = BOOKS[abbrev];
+  if (!book) return null;
+  
+  const chapIdx = ch - 1;
+  if (chapIdx < 0 || chapIdx >= book.c.length) return null;
+  
+  const chap = book.c[chapIdx]; // [[ko_verses], [en_verses]]
+  const ko = chap[0];
+  const en = chap[1];
+  const n = Math.max(ko.length, en.length);
+  
+  const verses = [];
+  const start = v1 ? v1 - 1 : 0;
+  const end = v2 ? v2 - 1 : (v1 ? v1 - 1 : n - 1);
+  
+  for (let i = start; i <= end && i < n; i++) {
+    verses.push({
+      num: i + 1,
+      ko: ko[i] || '',
+      en: en[i] || ''
+    });
+  }
+  return verses;
+}
+
+function lookup() {
+  const raw = document.getElementById('input').value;
+  if (!raw.trim()) return;
+  
+  const ref = parseRef(raw);
+  const main = document.getElementById('main');
+
+  if (!META) {
+    main.innerHTML = '<div class="error">성경 데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요.</div>';
+    return;
+  }
+
+  if (!ref) {
+    main.innerHTML = '<div class="error">구절 형식을 인식하지 못했습니다.<br>예: 요 3:16 · John 3:16 · 시 23 · Ps 23:1-6</div>';
+    return;
+  }
+  
+  const verses = getVerses(ref.abbrev, ref.ch, ref.v1, ref.v2);
+  
+  if (!verses || verses.length === 0) {
+    main.innerHTML = '<div class="error">해당 구절을 찾을 수 없습니다.<br>' + ref.abbrev + ' ' + ref.ch + (ref.v1 ? ':' + ref.v1 : '') + '</div>';
+    return;
+  }
+  
+  const book = BOOKS[ref.abbrev];
+  const refLabel = book.en + ' ' + ref.ch + (ref.v1 ? ':' + ref.v1 + (ref.v2 ? '–' + ref.v2 : '') : '');
+  const bookNames = book.ko + ' · ' + book.en;
+  
+  let html = '<div class="result-header">';
+  html += '<div class="result-ref">' + esc(refLabel) + '</div>';
+  html += '<div class="result-books">' + esc(bookNames) + '</div>';
+  html += '</div>';
+  html += '<div class="col-labels"><div class="col-label">#</div><div class="col-label">' + esc(META.names.ko || '') + '</div><div class="col-label">' + esc(META.names.en || '') + '</div></div>';
+  html += '<div class="verses">';
+  
+  for (const v of verses) {
+    const koCls = v.ko ? 'ko-text' : 'ko-text empty';
+    const enCls = v.en ? 'en-text' : 'en-text empty';
+    html += '<div class="verse">';
+    html += '<div class="vnum">' + v.num + '</div>';
+    html += '<div class="' + koCls + '">' + esc(v.ko || '—') + '</div>';
+    html += '<div class="' + enCls + '">' + esc(v.en || '—') + '</div>';
+    html += '</div>';
+  }
+  
+  html += '</div>';
+  main.innerHTML = html;
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Enter key
+document.getElementById('input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') lookup();
+});
+
+// Auto-focus
+document.getElementById('input').focus();
+</script>
+</body>
+</html>
