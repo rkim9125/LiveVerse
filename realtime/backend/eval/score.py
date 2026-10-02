@@ -85,6 +85,8 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
     labels = [c for c in labels if c.get("decision") in ("accept", "fix", "reject")]
     preds = predictions(d / transcript_name)
+    meta_path = d / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
 
     window_preds: dict[str, set[str]] = {c["id"]: set() for c in labels}
     unlabeled_fp = 0
@@ -118,6 +120,7 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
                 fp_types[t] += c_fp
     fp += unlabeled_fp
     return {
+        "split": meta.get("split", "unset"),
         "agreement": agreement(labels),
         "sermon": sermon,
         "labels": len(labels),
@@ -191,8 +194,12 @@ def main() -> None:
     total["fp_by_type"] = dict(sum((Counter(s["fp_by_type"]) for s in per), Counter()))
     total["fn_by_type"] = dict(sum((Counter(s["fn_by_type"]) for s in per), Counter()))
 
+    splits = sorted({s["split"] for s in per})
+    if len(splits) > 1:
+        raise SystemExit(f"do not mix dev and test sermons in one report: {splits}")
     report = {
         "name": args.name,
+        "split": splits[0],
         "at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
         "transcript": args.transcript,
@@ -212,7 +219,7 @@ def markdown(report: dict) -> str:
     t = report["total"]
     sources = ", ".join(f"{k} {v}" for k, v in t["label_sources"].items())
     lines = [
-        f"# Score: {report['name']}",
+        f"# Score: {report['name']} ({report['split']} set)",
         "",
         f"- Date: {report['at'][:10]}, code git {report['git_commit']}",
         f"- Transcript: {report['transcript']}",
