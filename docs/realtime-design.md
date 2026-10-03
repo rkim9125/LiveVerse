@@ -173,19 +173,23 @@ class SpeechSource(Protocol):
 
 When a passage is shown, or a book or chapter has just been spoken, and the preacher starts reading, the reading decides which verse it is.
 
-1. **Search order:**
-   - First, inside the spoken book and chapter: few verses, so lower thresholds are safe.
-   - Then neighboring chapters.
-   - If no chapter is known, the whole book, with a longer stretch of reading required.
-2. **Outcomes:**
+1. **A chapter or verse said without a book** ("3장 16절", "17절") is shown at once in the book said last. This is the existing behavior. Reading confirmation then checks it.
+2. **Search order:**
+   1. the current book and chapter (few verses, so lenient thresholds are safe)
+   2. the whole current book, needing a longer stretch of reading
+   3. the whole Bible, only if the current book does not match
+3. **Outcomes:**
    - **confirm:** the read verse is the shown one. Its confidence goes up.
-   - **replace:** the read verse differs. For example, STT misheard the number or the book, or the parser chose the wrong context. The screen switches to the read verse.
    - **fill in:** a chapter or a book was shown, and the reading identifies the verse.
-3. **Translation differences:**
+   - **replace inside the book:** the read verse is elsewhere in the current book. The screen switches to it.
+   - **replace from the whole Bible:** the current book does not match, and a verse elsewhere matches confidently. The screen switches to it at once. "Confidently" means a long match that clearly beats the second best (starting thresholds from the dev set: coverage 0.6, at least 15 shared trigrams, 0.2 ahead of the next verse).
+   - Reading on into the next verses is not a replace. Reading follow (#13) handles it.
+4. **Translation differences:**
    - The local Korean text is 개역한글. The preacher may read 개역개정, which changes words and endings.
    - Matching tolerates this. Syllable trigrams are compared on stems without endings, and a sequence alignment allows substituted words.
    - If a second Korean translation is available locally, both are indexed.
-4. Reading confirmation runs only after a mention or announcement, never on its own. Otherwise every sentence that sounds biblical would move the screen.
+5. Reading confirmation runs only after a mention or announcement, never on its own. Otherwise every sentence that sounds biblical would move the screen.
+6. **What it cannot fix:** a wrong verse that is never read aloud. In the dev set, all three wrong detections were of this kind (for example "the verses 19 and 20 we read earlier", with no reading). Those need the context rules or the LLM.
 
 ### 3.8 Reading follow (#13)
 

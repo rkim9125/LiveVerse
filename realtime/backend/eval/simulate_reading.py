@@ -38,11 +38,15 @@ import score  # noqa: E402
 from app.core import bible_text  # noqa: E402
 from app.core.models import Reference  # noqa: E402
 from app.detect.announce import dimmed_chapters  # noqa: E402
-from app.detect.quotes import _ko_grams  # noqa: E402
+from app.detect.quotes import QuoteIndex, _ko_grams  # noqa: E402
 
 ANCHOR_S = 120.0
 CHAPTER = {"coverage": 0.3, "hits": 5}
 BOOK = {"coverage": 0.5, "hits": 12}
+# Whole Bible, used only when the spoken book does not match: a confident match
+# replaces the shown passage.
+BIBLE = {"coverage": 0.6, "hits": 15, "margin": 0.2}
+GLOBAL = {"index": None, "on": False}  # set in main()
 AFTER_LABEL_S = 60.0
 
 
@@ -95,6 +99,14 @@ def readings(segments: list[dict], index: dict) -> list[tuple[float, str]]:
         if found:
             c, v = found[1]
             out.append((seg.start, f"{ref.book} {c}:{v}"))
+            continue
+        if GLOBAL["on"]:
+            best = GLOBAL["index"]._best(GLOBAL["index"].korean, seg_grams, BIBLE["hits"])
+            if best:
+                cov, _, (book, c, v) = best[0]
+                second = best[1][0] if len(best) > 1 else 0.0
+                if cov >= BIBLE["coverage"] and cov - second >= BIBLE["margin"]:
+                    out.append((seg.start, f"{book} {c}:{v}"))
     return out
 
 
@@ -119,6 +131,8 @@ def simulate(sermon: str, transcript: str, index: dict) -> Counter:
     out: Counter = Counter()
     for c in labels:
         if c.get("decision") not in ("accept", "fix") or not c["correct_refs"]:
+            continue
+        if c.get("label_source") == "user" and c.get("review_status") == "unsure":
             continue
         window = [r for a, b, r in preds if c["t_start"] - 1 < b and c["t_end"] + 1 > a]
         later = [r for t, r in reads if c["t_start"] - 1 <= t <= c["t_end"] + AFTER_LABEL_S]
@@ -148,11 +162,16 @@ def main() -> None:
     if not text.has_korean:
         raise SystemExit("needs local Korean text (data/bible_data.js)")
     index = build_grams(text)
-    for transcript in ("whisper.json", "whisper.prompted.json"):
-        total: Counter = Counter()
-        for s in args.sermons:
-            total += simulate(s, transcript, index)
-        print(transcript, dict(sorted(total.items())), "gold refs", sum(total.values()))
+    GLOBAL["index"] = QuoteIndex(text)
+    for rule, on in (("chapter, then book", False), ("chapter, book, then whole Bible", True)):
+        GLOBAL["on"] = on
+        for transcript in ("whisper.json", "whisper.prompted.json"):
+            total: Counter = Counter()
+            for s in args.sermons:
+                total += simulate(s, transcript, index)
+            print(
+                f"[{rule}] {transcript}", dict(sorted(total.items())), "gold", sum(total.values())
+            )
 
 
 if __name__ == "__main__":
