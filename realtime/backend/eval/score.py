@@ -135,7 +135,12 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
 def score_sermon(sermon: str, transcript_name: str) -> dict:
     d = corpus_dir() / sermon
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
-    labels = [c for c in labels if c.get("decision") in ("accept", "fix", "reject")]
+    labels = [
+        c
+        for c in labels
+        if c.get("decision") in ("accept", "fix", "reject")
+        and not (c.get("label_source") == "user" and c.get("review_status") == "unsure")
+    ]
     preds = predictions(d / transcript_name)
     meta_path = d / "meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
@@ -192,8 +197,8 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
 
 
 def agreement(labels: list[dict]) -> dict:
-    """How often the first-pass AI label (claude_refs) matched the final label."""
-    rows = [c for c in labels if "claude_refs" in c]
+    """How often the AI label (claude_refs) matched a label a person decided."""
+    rows = [c for c in labels if "claude_refs" in c and c.get("label_source") == "user"]
     same = sum(sorted(c["claude_refs"]) == sorted(c["correct_refs"]) for c in rows)
     ai = sum(len(c["claude_refs"]) for c in rows)
     human = sum(len(c["correct_refs"]) for c in rows)
