@@ -7,7 +7,7 @@ LiveVerse is a Korean/English Bible verse lookup for church interpreters. The st
 ## Rules
 
 - **Realtime work:**
-  - Before planning or changing anything in the realtime sermon assistant (`realtime/`, speech input, reference detection, backend, console or display), read [docs/realtime-design.md](docs/realtime-design.md) and follow it.
+  - Before planning or changing anything in the realtime sermon assistant (`realtime/`, speech input, reference detection, backend, interpreter screen), read [docs/realtime-design.md](docs/realtime-design.md) and follow it.
   - If a change departs from the design, update the design document in the same change and say why.
 - **Copyrighted Bible text:**
   - Never commit copyrighted Bible text (NKJV, 개역한글, 개역개정), never bake it into Docker images, and never put it in test fixtures.

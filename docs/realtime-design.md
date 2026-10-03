@@ -1,54 +1,68 @@
 # LiveVerse Realtime: Design
 
-Status: draft for review (stage 0)
-Date: 2026-10-02
+Status: v2, 2026-10-03
+
+Changes from v1:
+- There is one screen, the interpreter's own. Nothing is projected.
+- The most likely verse is shown right away, without a click.
+- An LLM can guess ambiguous mentions, and its guess is shown as tentative.
+- New: confirming the verse from what the preacher reads aloud (#12), and following the reading verse by verse (#13).
 
 ## 1. Goal
 
-Help church interpreters during live sermons. The system listens to the sermon, notices when the preacher mentions a Bible reference, and shows it to the interpreter as a candidate. The interpreter clicks a candidate, and the verse text (NKJV / 개역한글) appears on a display screen.
+Help a church interpreter during live sermons. The interpreter reads the NKJV on their own screen while interpreting into English. The system listens to the sermon and puts the passage the preacher is talking about on that screen. When the preacher reads the passage aloud, the screen follows along.
 
-### Principles already decided
+### Principles
 
-1. **Rule-based detection first.** A deterministic parser handles absolute references ("요한복음 3장 16절") and relative ones ("다음 절", "17절"). For relative references, it uses the last displayed verse as context. An LLM is optional, sits behind its own interface, and can be swapped between a local model (Ollama) and the Claude API. The whole system must work with no LLM configured.
-2. **Nothing is displayed automatically.** The system only suggests. The interpreter confirms each candidate with a click.
-3. **Speech recognition is swappable.** The first version uses the browser Web Speech API. Later, server-side Whisper can replace it without changing the parser or the UI.
-4. **Backend is Python FastAPI** with REST and WebSocket endpoints, packaged with Docker.
-5. **The static demo stays as it is.** `index.html` keeps working on its own. New work lives in a separate folder (`realtime/`) on a separate branch.
-6. **Copyrighted text stays local.** NKJV and 개역한글 data are never committed or baked into images. The public demo uses the KJV.
+1. **Rule-based detection first.**
+   - A deterministic parser handles absolute references ("요한복음 3장 16절") and relative ones ("다음 절", "17절").
+   - The whole system works without an LLM.
+2. **Show the best guess right away.**
+   - The most likely candidate appears on the screen as soon as it is detected, without waiting for a click.
+   - Other candidates are listed small beside it, and one key switches to any of them.
+   - Every shown passage carries its confidence and where it came from.
+3. **Ambiguous mentions may get an LLM guess, marked as tentative.**
+   - The LLM sits behind an interface that can use a local model (Ollama) or the Claude API.
+   - A tentative guess is replaced as soon as rules or the reading confirm something.
+4. **The reading is the strongest evidence.**
+   - When the preacher starts reading, the words are matched against the Bible text to confirm, correct or fill in the shown verse (#12).
+   - While the reading goes on, the screen highlights the verse being read (#13).
+5. **Speech recognition is swappable.** The first version uses the browser Web Speech API. Server-side Whisper can replace it later.
+6. **Backend is Python FastAPI** with REST and WebSocket endpoints, packaged with Docker.
+7. **The static demo stays as it is.** New work lives in `realtime/` on the `feature/realtime` branch.
+8. **Copyrighted text stays local.** NKJV and 개역한글 are loaded at run time from the local `data/` folder. They are never committed or put in images. The public demo uses the KJV.
 
-### Non-goals (for now)
+### Non-goals
 
+- Projecting or streaming verses to the congregation
 - Machine translation of the sermon
-- Automatic display without a human in the loop
 - Multi-church hosting or user accounts
 
 ## 2. Architecture
 
 ```mermaid
 flowchart LR
-    subgraph Booth["Interpreter laptop (browser)"]
+    subgraph Laptop["Interpreter laptop (browser)"]
         MIC["Audio input<br/>(mixer feed)"]
         STT["STT adapter<br/>Web Speech API"]
-        CON["Interpreter console"]
+        SCREEN["Interpreter screen<br/>shown verse, alternatives,<br/>reading highlight"]
     end
 
     subgraph Server["Backend (FastAPI, Docker)"]
         WS["WebSocket hub"]
-        REST["REST API"]
-        subgraph Detect["Detection pipeline"]
-            NORM["Normalizer<br/>numerals, spacing"]
-            RULE["Rule parser<br/>absolute refs"]
-            CTX["Context resolver<br/>relative refs"]
-            LLM["LLM resolver<br/>optional"]
-            RANK["Dedupe + rank"]
+        subgraph Detect["Detection"]
+            NORM["Normalizer"]
+            RULE["Rule parser<br/>near-match names"]
+            CTX["Context resolver<br/>spoken position"]
+            GATE["Passing chapter gate"]
+            QUOTE["Quote search"]
         end
-        SESS["Session state<br/>displayed ref, history"]
+        READ["Reading tracker<br/>confirm (#12), follow (#13)"]
+        LLM["LLM resolver<br/>optional, tentative"]
+        RANK["Ranker and<br/>display policy"]
+        SESS["Session state"]
         STORE["Bible store"]
         WHISPER["Whisper STT<br/>later"]
-    end
-
-    subgraph Out["Display device"]
-        DISP["Display screen<br/>projector, TV, OBS"]
     end
 
     DATA[("data/bible_data.js<br/>local only<br/>or KJV sample")]
@@ -57,99 +71,130 @@ flowchart LR
 
     MIC --> STT
     STT -- "transcript segments" --> WS
-    MIC -. "audio chunks (later)" .-> WHISPER
+    MIC -. "audio (later)" .-> WHISPER
     WHISPER -.-> NORM
-    WS --> NORM --> RULE --> CTX --> RANK
+    WS --> NORM --> RULE --> CTX --> GATE --> RANK
+    WS --> QUOTE --> RANK
+    WS --> READ --> RANK
     CTX -. "ambiguous only" .-> LLM
     LLM -.-> RANK
     LLM -.-> OLLAMA
     LLM -.-> CLAUDE
     CTX <--> SESS
-    RANK -- "candidates" --> WS --> CON
-    CON -- "select candidate" --> WS
-    WS -- "show verse" --> DISP
-    STORE --> RANK
-    STORE --> WS
+    READ <--> SESS
+    RANK --> SESS
+    RANK -- "shown passage, alternatives,<br/>reading verse" --> WS --> SCREEN
+    SCREEN -- "switch, clear, search" --> WS
     DATA --> STORE
-    CON --> REST
+    STORE --> QUOTE
+    STORE --> READ
+    STORE --> RANK
 ```
 
 Dotted lines are optional or later-stage paths.
 
-### Sequence: from speech to display
+### Sequence: from speech to the screen
 
 ```mermaid
 sequenceDiagram
     participant P as Preacher audio
     participant B as Browser STT
     participant S as Backend
-    participant I as Interpreter console
-    participant D as Display screen
+    participant I as Interpreter screen
 
     P->>B: "요한복음 3장 16절 말씀입니다"
-    B->>S: transcript {text, is_final:false}
-    S->>S: normalize, parse, resolve
-    S->>I: candidates [John 3:16, tentative]
-    B->>S: transcript {text, is_final:true}
-    S->>I: candidates [John 3:16, confirmed]
-    I->>S: select {candidate_id}
-    S->>S: set displayed context = John 3:16
-    S->>D: show {John 3:16, ko, en}
-    P->>B: "다음 절도 보시면"
-    B->>S: transcript {text, is_final:true}
-    S->>I: candidates [John 3:17 via context]
+    B->>S: transcript {text, is_final}
+    S->>S: detect John 3:16
+    S->>I: show John 3:16 (rule, high)
+    P->>B: reads the verse aloud
+    B->>S: transcript {text, is_final}
+    S->>S: match reading inside John 3
+    S->>I: confirmed John 3:16, highlight verse 16
+    P->>B: reads on
+    B->>S: transcript {text, is_final}
+    S->>I: highlight verse 17
 ```
 
 ## 3. Components
 
 ### 3.1 Audio input and STT adapter
 
-- The STT adapter turns audio into text segments: `{text, is_final, lang, t_client}`.
-- **Stage 3 implementation: browser Web Speech API.**
-  - It runs in Chrome on the interpreter laptop with `lang="ko-KR"` and interim results enabled, and auto-restarts when the browser ends recognition.
-  - It sends both interim and final segments to the backend over the WebSocket.
-- **Later: server-side Whisper.**
-  - The browser streams audio chunks instead of text, and the backend runs `faster-whisper` with voice activity detection.
-  - Its output enters the pipeline at the same point (the normalizer). The parser, console and display do not change.
-- The interface on the backend:
+- The adapter turns audio into text segments: `{text, is_final, lang, t_client}`.
+- **Stage 3: browser Web Speech API.** Chrome on the interpreter laptop, `lang="ko-KR"`, interim results on, automatic restart. Segments go to the backend over the WebSocket.
+- **Later: server-side Whisper.** The browser streams audio and the backend runs Whisper. Output enters the pipeline at the normalizer, so nothing after it changes.
+- Evaluation on recorded sermons showed that a prompt with Bible book names, applied to every 30 s window, removes most misheard book names (see `realtime/backend/eval`). Web Speech has no such prompt, which is why near-match book names (3.3) matter.
 
-  ```python
-  class SpeechSource(Protocol):
-      async def segments(self) -> AsyncIterator[TranscriptSegment]: ...
-  ```
-
-  `BrowserTranscriptSource` wraps the WebSocket messages, and `WhisperSource` wraps audio chunks.
+```python
+class SpeechSource(Protocol):
+    async def segments(self) -> AsyncIterator[TranscriptSegment]: ...
+```
 
 ### 3.2 Normalizer
 
-Turns raw transcript text into a form the parser can rely on.
+- Sino-Korean and English number words become digits.
+- Range and colon characters are unified.
+- "10편 N편" (a common mishearing of 시편) becomes 시편 N편.
+- An offset map leads back to the original text, so the screen can show what was matched.
 
-- Converts Sino-Korean numerals to digits: `삼` 3, `십육` 16, `백십구` 119, `이십삼` 23.
-- Converts English number words: `sixteen` 16, `one hundred nineteen` 119, `twenty third` 23.
-- Unifies separators: `：`, ` : `, and spoken "colon" become `:`. `~`, `～`, `부터 ... 까지`, `through` and `to` become a range marker.
-- Collapses spacing variants: `3 장` and `3장`, `요한 복음` and `요한복음`.
-- Keeps a character offset map back to the original text, so the console can highlight what was matched.
+### 3.3 Rule parser
 
-### 3.3 Rule parser (absolute references)
+- Finds book + chapter (+ verse, + range) mentions inside a segment.
+- **Book names:**
+  - Korean names must start a word, and they may contain spaces only at known joins (요한 복음, 고린도 전서, 요한 일 서). This stops matches like 나오미가 → 미가.
+  - Short forms (요, 시, 요일, 고전) are accepted in typed search only.
+- **Near-match names:** an unknown word right before a chapter number is compared with the 66 book names by jamo edit distance.
+  - Close matches are accepted.
+  - Looser matches are accepted only for a book already shown in this service.
+  - A word that looks like a book name but cannot be confirmed blocks the old context, so its chapter is not read as a chapter of the previous book.
+- **Ranges:** verses said in a row become one range ("19절 20절", "1절 5절까지").
 
-- Finds book + chapter (+ verse, + range) mentions inside a longer segment, not only whole-string input like the current `parseRef()`.
-- Book aliases come from one table generated from `scripts/books.py`, which keeps the static demo and the backend in sync.
-- **Speech mode turns off single-syllable abbreviations** (`요`, `창`, `마`, `막`). They are common in typed input but collide with ordinary speech, for example the sentence ending "...했어요 3". Typed lookups in the console keep them.
-- Each result carries `matched_text`, `span`, `kind` (`absolute`), and a confidence score. The score is raised by trigger words nearby ("말씀", "읽겠습니다", "보시면", "let's read", "turn to") and lowered by missing verse numbers or by book names that double as person names ("요한", "마가", "누가" without "복음").
+### 3.4 Context: two kinds
 
-### 3.4 Context resolver (relative references)
+- **Spoken position:** the last reference the preacher said, including chapters said in passing. Relative mentions ("2절", "다음 절") are resolved against it.
+- **Shown passage:** what is on the interpreter's screen now. It is used to hide a chapter said again while one of its verses is shown, and to allow looser near-match names.
+- Evaluation showed that resolving relative mentions only against the shown passage loses the preacher's position. For example, "이제 2장에 보면" moves the preacher back to chapter 2 even though it is not worth showing.
 
-- Session context is the **last displayed** reference, which the interpreter set by clicking. It is not the last detected candidate.
-- Resolves:
-  - verse only: "17절" means verse 17 in the context book and chapter
-  - next and previous: "다음 절", "앞 절"
-  - next chapter: "다음 장"
-  - the same chapter: "같은 장 20절"
-  - going back: "다시 16절로"
-- Bounds are checked against the Bible store. "Next verse" after the last verse of a chapter goes to verse 1 of the next chapter, at lower confidence.
-- If there is no context yet, a relative mention produces no candidate. The miss is logged for evaluation.
+### 3.5 Passing chapter gate
 
-### 3.5 LLM resolver (optional, stage 5)
+- A chapter-only mention counts as a full candidate only if one of these happens within 10 s:
+  - an announcement phrase ("보시겠습니다", "펴", "같이 읽겠습니다", "돌아가 보겠습니다")
+  - a verse of the same chapter
+  - "N장입니다"
+- Otherwise it is dimmed. It is listed among the alternatives but not shown as the main passage.
+- A live session cannot see the next 10 s, so a chapter starts dimmed and is promoted when the confirming words arrive.
+
+### 3.6 Quote search (#10)
+
+- A verse quoted word for word without its number is found by trigram overlap against the loaded text.
+- It uses Korean when local Korean text is present, and English (KJV) otherwise.
+- Verses inside a chapter that was announced for reading are not reported as quotes, because that is reading.
+
+### 3.7 Reading confirmation (#12)
+
+When a passage is shown, or a book or chapter has just been spoken, and the preacher starts reading, the reading decides which verse it is.
+
+1. **Search order:**
+   - First, inside the spoken book and chapter: few verses, so lower thresholds are safe.
+   - Then neighboring chapters.
+   - If no chapter is known, the whole book, with a longer stretch of reading required.
+2. **Outcomes:**
+   - **confirm:** the read verse is the shown one. Its confidence goes up.
+   - **replace:** the read verse differs. For example, STT misheard the number or the book, or the parser chose the wrong context. The screen switches to the read verse.
+   - **fill in:** a chapter or a book was shown, and the reading identifies the verse.
+3. **Translation differences:**
+   - The local Korean text is 개역한글. The preacher may read 개역개정, which changes words and endings.
+   - Matching tolerates this. Syllable trigrams are compared on stems without endings, and a sequence alignment allows substituted words.
+   - If a second Korean translation is available locally, both are indexed.
+4. Reading confirmation runs only after a mention or announcement, never on its own. Otherwise every sentence that sounds biblical would move the screen.
+
+### 3.8 Reading follow (#13)
+
+- While a passage is being read, each new segment is matched against the next few verses (v, v+1, v+2).
+- The screen highlights the verse being read and keeps it in view.
+- Skipped verses are allowed. Going backwards needs a stronger match.
+- Reading follow stops when the preacher's words stop matching for about 20 s, or when a new reference is spoken.
+
+### 3.9 LLM resolver (optional, tentative)
 
 ```python
 class RefResolver(Protocol):
@@ -158,70 +203,72 @@ class RefResolver(Protocol):
     ) -> list[Candidate]: ...
 ```
 
-- **Implementations:**
-  - `NullResolver` is the default and returns nothing.
-  - `OllamaResolver` uses a local model.
-  - `ClaudeResolver` uses the Claude API, for example `claude-haiku-4-5-20251001` for low latency.
-- **When it is called:**
-  - only for segments that contain trigger words but where the rules found nothing or found conflicting results
-  - never on every segment
-- **Limits:**
-  - It runs asynchronously, with a timeout of about 1.5 s.
-  - Its candidates arrive later and are labeled `source: llm`.
-  - Rule candidates are never delayed by it.
-- **Output checks:**
-  - The LLM returns structured references only, never verse text.
-  - Every reference is validated against the Bible store, and invalid ones are dropped.
-- **Configuration:** chosen with `LLM_PROVIDER=none|ollama|claude`.
+- Implementations: `NullResolver` (default), `OllamaResolver`, `ClaudeResolver` (for example `claude-haiku-4-5-20251001` for low latency).
+- **Called only for ambiguous cases:**
+  - an unconfirmed book name
+  - conflicting candidates
+  - a quote that almost matches
+- **Output:**
+  - The LLM returns references, never verse text. Every reference is validated against the Bible store.
+  - Its guess is shown as **tentative**, with a confidence label, and only when nothing better is on screen.
+  - Rule, reading or quote evidence replaces it.
+- Timeout about 1.5 s. Rule candidates are never delayed.
+- `LLM_PROVIDER=none|ollama|claude`.
 
-### 3.6 Dedupe and ranking
+### 3.10 Ranker and display policy
 
-- Merges the same reference seen in interim and final segments under one stable candidate ID.
-- Suppresses repeats of the same reference within a short window (default 30 s) unless the interpreter cleared it.
-- Keeps the last 5 candidates, newest first. Displayed candidates are marked.
+- **Main passage:** the highest-confidence candidate.
+- **Order of evidence**, strongest first:
+  1. reading match
+  2. absolute rule reference
+  3. quote
+  4. relative reference
+  5. LLM guess
+- **Hysteresis:** interim results do not flip the screen back and forth. A new main passage needs a new mention or stronger evidence.
+- **Alternatives:** up to 3, small at the side, including dimmed chapters.
+- **Interpreter override:**
+  - keys `1` to `3` switch to an alternative
+  - `Esc` clears
+  - a search box takes typed references
+  - An override holds until the next new mention.
 
-### 3.7 Session state
+### 3.11 Session state
 
 - One session per service. It holds:
-  - the displayed reference (the context)
-  - the candidate list
-  - a history of what was displayed
-  - the connected clients by role (`console`, `display`)
-- It lives in memory. A restart starts a new session, which is acceptable for a two-hour service.
+  - the spoken position
+  - the shown passage
+  - the alternatives
+  - the reading tracker state
+  - the books shown so far
+  - a history
+- Kept in memory. A restart starts a new session.
 
-### 3.8 Bible store
+### 3.12 Bible store
 
-- Loads `data/bible_data.js`, the same file the static demo uses, by stripping the `window.BIBLE_DATA =` wrapper. If that file is missing, it falls back to `data/sample/kjv.js`.
-- The path comes from `BIBLE_DATA_PATH`. In Docker, `data/` is mounted read-only, so text is never copied into an image.
-- It provides lookups by reference and the verse and chapter counts for bounds checks.
+- Loads `data/bible_data.js`, the file the static demo uses, or `data/sample/kjv.js` if it is missing. `BIBLE_TEXT_PATH` overrides the path.
+- In Docker, `data/` is mounted read only.
+- Provides verse text for the screen, chapter and verse counts, and the indexes for quote search and reading.
 
-### 3.9 Interpreter console (browser)
+### 3.13 Interpreter screen
 
-- Shows the live transcript (small, scrolling) with matched text highlighted.
-- Shows the candidate list with the reference, a one-line preview, a source tag (`rule`, `context`, `llm`) and a confidence indicator.
-- **One click or one key displays a candidate.** Keys `1` to `5` pick a candidate, `N` shows the next verse, and `Esc` clears the display. Interpreters are speaking the whole time, so selection must take almost no attention.
-- Includes a manual search box that reuses the typed parser, as a fallback.
+- Large NKJV text of the shown passage. 개역한글 can be shown beside it, smaller, if the interpreter wants it.
+- The verse being read is highlighted (#13).
+- A badge shows the source (rule, reading, quote, LLM) and the confidence. Tentative passages are styled differently.
+- Alternatives are listed at the side.
+- A small transcript ticker shows the matched words.
+- Large type, dark and light themes, and nothing that needs a mouse during a sermon.
 
-### 3.10 Display screen (browser)
+### 3.14 Protocol
 
-- A full-screen page that only listens for `show` and `clear`.
-- Layout options: Korean + English, English only, or Korean only, with large type.
-- Works as an OBS browser source too, if the church streams.
-
-### 3.11 Protocol
-
-WebSocket `/ws?role=console|display&session=<id>&pin=<pin>`
+WebSocket `/ws?session=<id>&pin=<pin>`
 
 | Direction | Type | Payload |
 |---|---|---|
-| console to server | `transcript` | `seq, text, is_final, lang, t_client` |
-| console to server | `select` | `candidate_id` |
-| console to server | `display_ref` | `ref` (from manual search or "next verse") |
-| console to server | `clear` | none |
-| server to console | `candidates` | `items[{id, ref, label, source, confidence, matched_text, preview}]`, `t_server` |
-| server to console | `context` | `displayed_ref` |
-| server to display | `show` | `ref, label, verses[{num, ko, en}], names` |
-| server to display | `clear` | none |
+| screen to server | `transcript` | `seq, text, is_final, lang, t_client` |
+| screen to server | `switch` | `candidate_id` |
+| screen to server | `search` | `ref` typed by the interpreter |
+| screen to server | `clear` | none |
+| server to screen | `state` | `shown {ref, source, confidence, tentative, verses[{num, ko, en}]}`, `alternatives[...]`, `reading {verse, confidence}`, `t_server` |
 
 REST
 
@@ -229,67 +276,42 @@ REST
 |---|---|---|
 | GET | `/api/health` | liveness, which data set is loaded |
 | GET | `/api/verses?ref=John+3:16-18` | verse lookup |
-| POST | `/api/parse` | debug: run the pipeline on a text and context |
+| POST | `/api/parse` | debug: run detection on a text and context |
 | POST | `/api/sessions` | start a session, returns id and PIN |
 | GET | `/api/sessions/{id}` | current state |
-| GET | `/api/metrics/latency` | latency summary for the session |
+| GET | `/api/metrics/latency` | latency summary |
 
 ## 4. Folder structure
-
-The new work goes on a feature branch, `feature/realtime`. Existing files stay where they are.
 
 ```
 index.html                     static demo (unchanged)
 data/                          local data (gitignored) + data/sample/kjv.js
-scripts/                       existing build and copyright scripts
-docs/
-  realtime-design.md           this document
+scripts/                       build and copyright scripts
+docs/realtime-design.md        this document
 realtime/
   README.md
   docker-compose.yml
   backend/
-    pyproject.toml
-    Dockerfile
-    .dockerignore              excludes data/ and local files
+    pyproject.toml, Dockerfile, .dockerignore
     app/
-      main.py                  FastAPI app
-      api/rest.py
-      api/ws.py
-      core/session.py
-      core/bible_store.py
-      core/models.py           Reference, Candidate, Context, Segment
-      detect/normalize.py
-      detect/numerals.py
-      detect/books.py          generated alias table
-      detect/parser.py         absolute references
-      detect/context.py        relative references
-      detect/pipeline.py
-      llm/base.py              RefResolver protocol
-      llm/null.py
-      llm/ollama.py
-      llm/claude.py
-      stt/base.py              SpeechSource protocol
-      stt/browser.py
-      stt/whisper.py           later
+      main.py
+      api/rest.py, api/ws.py
+      core/models.py, core/bible_text.py, core/session.py
+      detect/normalize.py, numerals.py, books.py, versification.*
+      detect/parser.py, context.py, announce.py, quotes.py, pipeline.py
+      reading/confirm.py         #12
+      reading/follow.py          #13
+      rank/policy.py
+      llm/base.py, null.py, ollama.py, claude.py
+      stt/base.py, browser.py, whisper.py
       metrics/latency.py
     tests/
-      fixtures/parser_cases.jsonl
-      test_numerals.py
-      test_parser.py
-      test_context.py
-      test_pipeline.py
-      test_ws.py
-    eval/
-      run_eval.py
-      corpus/                  gitignored: recordings, transcripts, labels
+    eval/                        transcription, candidates, labeling, scoring
   frontend/
-    console/index.html, console.js
-    display/index.html, display.js
+    interpreter/index.html, screen.js
     shared/ws.js, speech.js
 .github/workflows/ci.yml
 ```
-
-`.gitignore` needs a fix in stage 1. Patterns like `*.json` and `*.txt` currently match at any depth, so files such as `tsconfig.json` would be ignored silently. They should be anchored to the repo root (`/*.json`, `/*.txt`). The `data/*` whitelist stays.
 
 ## 5. Reference expressions the parser must handle
 
@@ -303,25 +325,30 @@ realtime/
 | No spaces | 요한복음3장16절 | John 3:16 |
 | Colon form | 요한복음 3:16 | John 3:16 |
 | Psalms use 편 | 시편 23편, 시편 23편 1절 | Psalms 23, Psalms 23:1 |
+| Misheard Psalms | 10편 139편 | Psalms 139 |
 | Chapter only | 로마서 8장 | Romans 8 |
 | Range with 부터/까지 | 3장 16절부터 18절까지 | :16 to 18 |
 | Range with 에서 | 16절에서 18절 | :16 to 18 |
 | Compact range | 16~18절, 16 내지 18절 | :16 to 18 |
-| List | 1절과 3절, 16, 17절 | separate candidates |
-| "and following" | 16절 이하 | :16, open range, show 16 first |
+| Verses in a row | 19절 20절, 19절과 20절, 1절 5절까지 | one range |
+| Non-consecutive | 1절과 4절 | separate |
+| "and following" | 16절 이하 | :16, open range |
 | Numbered books | 고린도전서, 고린도 전서, 고전 (typed only) | 1 Corinthians |
-| Numbered epistles | 요한일서, 요한 1서, 요한 일서 | 1 John |
+| Numbered epistles | 요한일서, 요한 1서, 요한 일 서 | 1 John |
+| Misheard names | 룩기, 레이기, 야고버서 | Ruth, Leviticus, James |
 | Ordinal "first" | 첫 절, 첫째 절 | verse 1 |
-| Last verse | 마지막 절 | last verse of chapter (from store) |
-| Verse only (relative) | 17절, 17절 말씀 | context book and chapter :17 |
-| Next / previous | 다음 절, 그 다음 절, 이어서, 앞 절 | context ±1 |
-| Next chapter | 다음 장, 4장으로 넘어가서 | context chapter + 1 / 4 |
-| Same chapter | 같은 장 20절, 같은 장 뒷부분 20절 | context chapter :20 |
-| Return | 다시 16절로 | context chapter :16 |
+| Last verse | 마지막 절 | last verse of chapter |
+| Verse only (relative) | 17절, 17절 말씀 | spoken position :17 |
+| Next / previous | 다음 절, 그 다음 절, 앞 절 | spoken position ±1 |
+| Next chapter | 다음 장, 4장으로 넘어가서 | chapter + 1 / 4 |
+| Same chapter | 같은 장 20절 | chapter :20 |
+| Return | 다시 16절로 | chapter :16 |
 | Particles attached | 요한복음을, 로마서에서, 3장에 | strip particles |
-| Trigger phrases | 말씀입니다, 읽겠습니다, 함께 보시면, 찾아보시면 | raise confidence |
-| Person names | 요한이, 마가가, 누가 (who) | no book unless 복음 or a chapter follows |
-| Non-Bible numbers | 3장짜리 편지, 2절기 | rejected (no book, no context) |
+| Trigger phrases | 말씀입니다, 읽겠습니다, 함께 보시면 | raise confidence |
+| Person names | 요한이, 마가가, 누가 (who) | no book |
+| Book name inside a word | 나오미가 (미가), 돌아가 (아가) | no book |
+| Hymns | 찬송가 305장, 새찬송가 305장 3절 | nothing |
+| Non-Bible numbers | 3장짜리 편지, 요한계시록의 7년 | nothing |
 
 ### 5.2 English
 
@@ -336,129 +363,97 @@ realtime/
 | Numbered books | First Corinthians 13, 1 Corinthians 13 | 1 Corinthians 13 |
 | First John vs John 1 | First John 1 9 vs John 1 9 | 1 John 1:9 vs John 1:9 |
 | Ranges | verses 16 through 18, 16 to 18 | :16 to 18 |
-| Verse only | verse 17 | context :17 |
-| Next / previous | next verse, the following verse, previous verse | context ±1 |
-| Return | back to verse 5 | context :5 |
-| Triggers | let's read, turn with me to, it says in | raise confidence |
-| Person names | John said, Mark wrote | no book unless a number follows |
+| Verse only | verse 17 | :17 |
+| Next / previous | next verse, the following verse | ±1 |
+| Person names | John said, Mark wrote | no book |
 
-These rows become fixtures in `tests/fixtures/parser_cases.jsonl`, one JSON object per case: `{input, lang, context, expected}`.
+These rows are fixtures in `realtime/backend/tests/fixtures/parser_cases.jsonl`.
 
 ## 6. Latency targets and measurement
 
 | Hop | Target (p95) | Notes |
 |---|---|---|
-| Final transcript received to candidates sent (rules) | 50 ms | parser alone should be under 5 ms per segment |
-| Candidates sent to rendered in console | 100 ms | LAN WebSocket + DOM |
-| Speech end to candidate visible (rules, end to end) | 1.5 s | dominated by STT finalization; interim results may show earlier |
-| Click to verse on display screen | 200 ms | same LAN |
-| LLM candidate (when enabled) | 2.5 s after final transcript | never blocks rule candidates |
+| Final transcript to candidates (rules) | 50 ms | parser alone is under 0.1 ms per segment |
+| Candidates to rendered on the screen | 100 ms | WebSocket + DOM |
+| Speech end to verse on screen (rules, end to end) | 1.5 s | dominated by STT finalization |
+| Reading segment to highlight update (#13) | 1 s after the segment is final | |
+| LLM tentative guess | 2.5 s after final transcript | never delays rule candidates |
 
-**How it is measured**
+Every message carries timestamps (`t_client`, `t_recv`, `t_sent`, `t_render`). The clock offset is estimated at connect time. The server writes one JSONL line per hop to a gitignored log, and `/api/metrics/latency` reports p50, p95 and max. A replay test plays a recorded sermon through the audio input for end to end numbers.
 
-- Every message carries timestamps:
-  - `t_client` when STT emits a segment
-  - `t_recv` and `t_sent` on the server
-  - `t_render` reported back by the console and the display
-- Clock offset between each browser and the server is estimated at connect time (NTP style ping, 5 samples, median).
-- The server writes one JSONL line per hop to `realtime/backend/logs/latency.jsonl`, which is gitignored. `GET /api/metrics/latency` returns p50, p95 and max per hop.
-- **Replay test:**
-  - A recorded sermon segment, with the speaker's consent and kept locally, is played through the audio input.
-  - The script compares labeled mention timestamps with the time each candidate appeared.
-  - It gives an end to end number that includes the STT.
-
-## 7. Test strategy
+## 7. Test and evaluation strategy
 
 ### 7.1 Unit tests (pytest)
 
-- `test_numerals.py`: Sino-Korean and English number words from 1 to 200, both directions, as a property test (Hypothesis).
-- `test_parser.py`: table-driven from `parser_cases.jsonl`. It covers every row in section 5, plus negative cases that must produce nothing.
-- `test_context.py`: relative references with and without context, chapter boundaries, last verse, missing context.
-- `test_pipeline.py`: interim then final segments, dedupe, ranking, trigger word confidence.
-- The same fixture file runs against the typed parser in the static demo. A small Node script imports the cases, so the two parsers do not drift on typed input.
+- Numerals (property test 1 to 200), parser fixtures, context, passing chapter gate, quote search.
+- Reading confirmation and follow use the KJV sample only, so CI needs no copyrighted text. Korean tests run only when local text exists and take their verses from it at run time.
 
 ### 7.2 Integration tests
 
-- FastAPI `TestClient` WebSocket tests with a fake speech source that replays scripted transcripts.
-- Checks that a `select` produces a `show` on every connected display and updates the context.
-- Runs with the KJV sample only, so CI never needs copyrighted data.
+- FastAPI WebSocket tests with a fake speech source that replays scripted transcripts.
+- Checks that the screen state changes as expected: shown passage, alternatives, reading highlight, override.
 
 ### 7.3 Accuracy evaluation
 
-- **Corpus:**
-  - Recorded sermons from a participating church, used with permission and stored only in `eval/corpus/` (gitignored).
-  - Each mention is labeled with timestamp, spoken text and the intended reference.
-- **Running in two modes:**
-  - Ground truth transcript, to measure the parser alone.
-  - STT transcript, to measure the whole pipeline.
-  - The difference between the two shows how much error comes from speech recognition.
+- **Corpus:** recorded sermons, used with permission, kept outside the repo (`$LIVEVERSE_CORPUS`). Labeling rules are in `realtime/backend/eval/LABELING.md`.
+- **Dev and test sets:**
+  - Rules and thresholds are tuned on the dev set only.
+  - The test set is labeled blind and scored once with a frozen version (git tag), then reported as is.
 - **Metrics:**
-  - detection precision, recall and F1 at the reference level
-  - top 1 and top 3 candidate accuracy
-  - relative reference resolution accuracy
-  - false positives per hour of sermon
-- **Comparisons:** rules only, then rules + Ollama, then rules + Claude, all on the same corpus. The LLM is enabled only if it raises recall without raising false positives per hour beyond an agreed limit.
-- **Output:** `eval/run_eval.py` writes a Markdown report. The report includes counts and metrics only, never transcript text.
+  - reference-level precision, recall and F1, strict and with a 15 s repeat allowance
+  - for the new display policy: how often the right passage was on screen when the preacher read it
+  - for #13: the share of read verses that were highlighted correctly
+- **Transcripts:** each run uses two transcripts, without and with the book-name prompt.
+- **LLM:** compared as rules only, rules + Ollama and rules + Claude. Enabled only if it raises recall without too many wrong tentative guesses.
+- **Reports** hold numbers only and state their limits.
 
 ### 7.4 CI checks
 
 - `scripts/check_no_copyrighted.sh` on all tracked files
-- `pytest` with coverage
-- `ruff`
-- the Node fixture check
+- `pytest` with coverage, `ruff`
 - `docker build` of the backend
 
 ## 8. Paid services and free alternatives
 
 | Area | Free option | Paid option | Notes |
 |---|---|---|---|
-| Speech to text (stage 3) | Web Speech API in Chrome | none needed | Free, but Chrome sends audio to Google, so it needs internet. Safari support varies. |
-| Speech to text (later) | `faster-whisper` on local hardware | OpenAI Whisper API, Deepgram, Google Cloud STT (per minute) | Local Whisper needs a reasonably fast machine (Apple Silicon or a GPU) for low latency in Korean. |
-| LLM resolver | none (rules only), Ollama with a local model | Claude API (per token) | Optional. Claude gives better quality with no hardware but sends transcript text off site. |
-| Bible text for display | KJV (public domain) | NKJV, 개역한글 / 개역개정 licensing for projection | The church should confirm permission terms with HarperCollins (NKJV) and 대한성서공회 for on-screen use. |
-| Hosting | interpreter laptop or a church PC on the LAN | cloud VM | A local LAN setup avoids cost and works without internet, except for Web Speech. |
-| HTTPS for microphone access | `localhost`, or `mkcert` on the LAN | public domain + certificate | Browsers allow microphone and speech APIs only in a secure context. |
+| Speech to text (stage 3) | Web Speech API in Chrome | none needed | Free, but Chrome sends audio to Google and needs internet. |
+| Speech to text (later) | Whisper on local hardware (mlx-whisper on Apple Silicon ran at about 14x real time) | OpenAI Whisper API, Deepgram, Google Cloud STT | Local Whisper also allows the book-name prompt. |
+| LLM resolver | none (rules only), Ollama with a local model | Claude API (per token) | Optional. Claude sends transcript text off site. |
+| Bible text | KJV (public domain) for the public demo | none | The interpreter's own licensed copy stays local and is never distributed. |
+| Hosting | the interpreter laptop | cloud VM | Everything can run on one laptop. |
+| HTTPS for microphone access | `localhost` | certificate | Browsers allow the microphone only in a secure context. |
 | CI | GitHub Actions (free for public repos) | none needed | |
-| Display | existing projector or TV + any browser, OBS browser source | none needed | |
 
 ## 9. Stages and completion criteria
 
 | Stage | Work | Done when |
 |---|---|---|
-| 0. Design | This document | Reviewed and approved. Committed on `feature/realtime` together with the CLAUDE.md rule. |
-| 1. Reference parser + tests | Numerals, normalizer, book aliases from `scripts/books.py`, absolute parser, context resolver, `.gitignore` anchoring fix | Every case from section 5 is in fixtures and passes. Numeral property test passes for 1 to 200. Parser module coverage is at least 90 percent. Parsing takes under 5 ms per segment. No web or STT code yet. |
-| 2. Backend API + Docker | FastAPI app, REST and WebSocket protocol from 3.11, session state, Bible store, `docker-compose.yml` | `docker compose up` serves `/api/health` and `/api/verses` with the KJV. WebSocket integration tests pass. The image contains no Bible text, and data is mounted read only. |
-| 3. Speech input | `speech.js` (Web Speech API, ko-KR, interim results, auto restart), transcript messages, latency timestamps, reconnect | Speaking a reference into the laptop mic produces a candidate on the server log in Chrome on `localhost`. Latency JSONL is written. A dropped WebSocket reconnects without a page reload. |
-| 4. Console + display | Interpreter console (transcript, candidates, keys 1 to 5, N, Esc, manual search) and the display screen | During a rehearsal with real audio, the interpreter can display candidates by click and by key. Click to display is under 200 ms p95 on the church LAN. The display works full screen and as an OBS source. |
-| 5. Optional LLM | `RefResolver` interface, Null, Ollama and Claude implementations, ambiguity trigger, timeout, validation | With `LLM_PROVIDER=none`, behavior is identical to stage 4. With a provider set, LLM candidates appear labeled and never delay rule candidates. The evaluation shows the recall gain and the false positive rate. |
-| 6. Measurement, CI, docs | Latency report, accuracy report, `.github/workflows/ci.yml`, README update | CI runs all checks from 7.4 on every push. Reports exist for one full recorded sermon. The README describes the realtime mode, setup and data rules, and the static demo is still linked and working. |
+| 0. Design | v1, then this v2 | Reviewed and approved |
+| 1. Reference detection | Parser, near-match names, ranges, passing chapter gate, quote search, evaluation tools | Done: fixtures pass, dev and frozen test evaluations reported |
+| 2. Backend API + Docker | FastAPI, protocol from 3.14, session state with both contexts, Bible store | `docker compose up` serves health and verses with the KJV. WebSocket tests pass. No Bible text in the image |
+| 3. Speech input | Web Speech adapter, transcript messages, latency timestamps, reconnect | Speaking a reference into the laptop mic puts it on the screen in Chrome on `localhost` |
+| 4. Interpreter screen | Shown passage, alternatives, badges, override keys, search, display policy with hysteresis | In a rehearsal with real audio, the right passage is on screen without clicks for most mentions, and the interpreter can switch in one key |
+| 5. Reading confirmation and follow (#12, #13) | Reading tracker with chapter-first search, translation-tolerant matching, verse highlight | Measured on the dev set, then once on the test set: share of correct passages on screen at reading time, and share of read verses highlighted correctly |
+| 6. Optional LLM | Resolver interface, Null, Ollama, Claude, tentative display | With `LLM_PROVIDER=none` nothing changes. With a provider, tentative guesses appear only for ambiguous mentions, and the evaluation shows the trade-off |
+| 7. Measurement, CI, docs | Latency report, accuracy reports, CI workflow, README | CI runs all checks. The README describes the realtime mode and data rules |
 
 ## 10. Open decisions
 
 **Church environment**
+1. Is internet available in the sanctuary? Web Speech needs it, local Whisper does not.
+2. Can we get a feed from the mixing console? A microphone near the interpreter also picks up the interpreter's own voice.
+3. Which Korean translation does the preacher read aloud (개역개정 or 개역한글)? Reading confirmation matches best against the same translation.
 
-1. Is internet available and reliable in the sanctuary? Web Speech needs it, while local Whisper does not.
-2. What audio source can we get? Options are a feed from the mixing console, or a microphone. A room or booth microphone will also pick up the interpreter's own voice, which would confuse detection. A mixer feed is strongly preferred.
-3. What language is the sermon in: Korean only, English only, or sometimes both?
-4. Who reads the display screen: the English speaking congregation (NKJV only), or everyone (both translations)?
-
-**Devices**
-
-5. What does the interpreter use? Is it a Mac laptop, and which browser?
-6. What drives the display: a separate PC, a TV with a browser, or OBS for the livestream?
-7. Where does the backend run: on the interpreter laptop, or on a separate always-on machine? For local Whisper or Ollama, which hardware is available?
+**Device**
+4. What does the interpreter use: a Mac laptop, a tablet beside it, or both? Which browser?
+5. Should the screen show 개역한글 beside the NKJV, or the NKJV only?
 
 **Policy**
-
-8. Does the church have, or need, permission to project NKJV and 개역한글 text?
-9. Is it acceptable to send sermon audio to Google (Web Speech) and transcript text to Anthropic (Claude API)? If not, use local Whisper and Ollama only.
-10. May we record sermons for the evaluation corpus? Who gives consent, and how long are recordings kept?
-11. Should transcripts and logs be deleted after each service?
+6. Is it acceptable to send sermon audio to Google (Web Speech) and transcript text to Anthropic (Claude API)? If not, use local Whisper and Ollama only.
+7. How long are recordings and transcripts kept after evaluation?
 
 **Product**
-
-12. How many interpreters and display screens will run at the same time?
-13. Is a simple session PIN on the LAN enough, or is more access control needed?
-14. Should the display wait for a click every time, or should the console offer a "follow mode" for "next verse" within an already displayed passage? This is still a click, but a single key.
-15. What is the acceptable false positive rate per hour? It sets the LLM acceptance threshold.
-16. Branch and release: when should `feature/realtime` merge to `main`, and should the realtime app also get a public KJV demo on GitHub Pages? Pages cannot host the backend.
+8. How confident must a candidate be to be shown without a click? A lower bar shows more, and shows more wrong passages.
+9. Should an LLM guess ever be shown on its own, or only next to a rule candidate?
+10. When should `feature/realtime` merge to `main`, and should a KJV demo of the screen go on GitHub Pages (without the backend)?

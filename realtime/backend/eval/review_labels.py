@@ -22,6 +22,8 @@ Usage (from realtime/backend):
     uv run python eval/review_labels.py sermon-02    # one sermon
     uv run python eval/review_labels.py --type quote # only quote-search candidates
     uv run python eval/review_labels.py --blind      # hide detector output and suggestions
+    uv run python eval/review_labels.py sermon-03 sermon-04 sermon-05 \
+        --ids ~/liveverse-corpus/test-sample-40.json   # only the fixed random sample
 
 Blind mode is on automatically for test-set sermons (meta.json "split": "test").
 It shows only the time, the transcript and the audio: no detect() result, no
@@ -324,6 +326,7 @@ def main() -> None:
     p.add_argument("sermons", nargs="*", help="default: every folder with a candidates.jsonl")
     p.add_argument("--type", help="review only candidates of this type, e.g. quote")
     p.add_argument("--blind", action="store_true", help="hide detector output and suggestions")
+    p.add_argument("--ids", help="JSON file with an 'ids' list: review only those candidates")
     args = p.parse_args()
 
     root = corpus_dir()
@@ -335,6 +338,9 @@ def main() -> None:
     if blind and any(s.split != "test" for s in sermons) and not args.blind:
         raise SystemExit("do not review test and dev sermons together; name the sermons")
     queue = review_order(sermons, args.type, blind)
+    if args.ids:
+        wanted = set(json.loads(Path(args.ids).expanduser().read_text(encoding="utf-8"))["ids"])
+        queue = [(s, it) for s, it in queue if it["id"] in wanted]
     total = len(queue)
     if not total:
         raise SystemExit(f"no candidates found under {root}")

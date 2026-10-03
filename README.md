@@ -89,7 +89,7 @@ docs/screenshot.png               README screenshot
 
 ## Roadmap
 
-- **Real-time sermon verse detection:** use speech-to-text to pick up verse references as the preacher says them. They appear as candidates on the interpreter's screen, and the interpreter clicks one to put it on the display.
+- **Real-time sermon assistant for the interpreter:** use speech-to-text to pick up verse references as the preacher says them, and put the most likely passage on the interpreter's own screen right away, with other candidates beside it. When the preacher reads the passage aloud, the reading confirms the verse and the screen follows along verse by verse.
 - **Backend API:** serve verse lookups from an API, so other tools such as slide software and the detection service can use the same data.
 
 The design for both is in [docs/realtime-design.md](docs/realtime-design.md).
