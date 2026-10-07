@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STT check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%233d6b4f'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f7f6f2; --card: #ffffff; --text: #22201b; --muted: #6f6a60; --line: #ddd8cc;
+    --accent: #3d6b4f; --warn: #a3620a; --error: #b3261e; --dim: #9a958b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161614; --card: #201f1c; --text: #ece9e2; --muted: #a39e93; --line: #3a3833;
+      --accent: #7fbf95; --warn: #e0a24a; --error: #f2877f; --dim: #77736b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  }
+  main { max-width: 920px; margin: 0 auto; display: grid; gap: 12px; }
+  h1 { font-size: 1.15rem; margin: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  button, input[type=text] {
+    font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; }
+  .label { color: var(--muted); font-size: .85rem; }
+  .status-error { color: var(--error); }
+  .status-warn { color: var(--warn); }
+  #interim { color: var(--muted); min-height: 1.5em; }
+  #finals { margin: 0; padding-left: 1.2em; max-height: 220px; overflow: auto; }
+  #shown-ref { font-size: 1.4rem; font-weight: 600; }
+  .badge { font-size: .75rem; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); }
+  .dimmed { color: var(--dim); }
+  #verses { margin: 6px 0 0; color: var(--muted); }
+  #alternatives { margin: 4px 0 0; padding-left: 1.2em; }
+  @media (max-width: 600px) { body { padding: 12px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>STT check</h1>
+  <p class="label">Checks speech input only. The interpreter screen comes in stage 4.</p>
+
+  <section class="card" aria-label="controls">
+    <div class="row">
+      <button id="start" class="primary">Start listening</button>
+      <button id="stop" disabled>Stop</button>
+      <label><input type="checkbox" id="eval-mode"> Evaluation capture</label>
+      <button id="save" disabled>Save transcript</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <span><span class="label">Server</span> <span id="conn">connecting</span></span>
+      <span><span class="label">Speech</span> <span id="speech-state">idle</span></span>
+      <span><span class="label">Input</span> <span id="device">unknown</span></span>
+      <span><span class="label">Restarts</span> <span id="restarts">0</span></span>
+      <span><span class="label">Gaps</span> <span id="gaps">0.0 s</span></span>
+      <span><span class="label">Finals</span> <span id="final-count">0</span></span>
+    </div>
+    <p id="message" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" aria-label="shown passage">
+    <div class="row">
+      <span id="shown-ref">nothing shown</span>
+      <span id="shown-source" class="badge" hidden></span>
+      <span id="shown-confidence" class="label"></span>
+    </div>
+    <p id="verses"></p>
+    <div class="label">Alternatives</div>
+    <ul id="alternatives"></ul>
+    <div class="row" style="margin-top:8px">
+      <span class="label">Last update</span> <span id="latency">none yet</span>
+    </div>
+    <form id="search-form" class="row" style="margin-top:8px">
+      <input type="text" id="search" placeholder="요 3:16, John 3:16" aria-label="search a reference">
+      <button type="submit">Show</button>
+      <button type="button" id="clear">Clear screen</button>
+    </form>
+  </section>
+
+  <section class="card" aria-label="transcript">
+    <div class="label">Interim</div>
+    <div id="interim"></div>
+    <div class="label" style="margin-top:8px">Recent finals (kept in this page only)</div>
+    <ol id="finals"></ol>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
