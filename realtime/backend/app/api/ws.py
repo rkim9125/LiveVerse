@@ -1,7 +1,10 @@
 """WebSocket protocol for the interpreter screen (design 3.14).
 
 Client to server
-    transcript  {seq, text, is_final, lang?, t_client?}  STT segment
+    transcript  {seq, text, is_final, lang?, t_client?, t_audio?}  STT segment.
+                t_audio (seconds into a recording) replaces the server clock for
+                the session's timing, so a recording can be replayed faster
+                than real time.
     switch      {candidate_id}                          show an alternative
     search      {query}                                 show a typed reference
     clear       {}                                      empty the screen
@@ -17,7 +20,6 @@ Server to client
 
 from __future__ import annotations
 
-import statistics
 import time
 import uuid
 
@@ -56,7 +58,7 @@ async def interpreter_socket(ws: WebSocket) -> None:
     app = ws.app
     session, hub = app.state.session, app.state.hub
     latency = app.state.latency
-    offsets: list[float] = []  # server clock minus client clock, from pings
+    offsets: list[float] = []  # receive time minus client send time, from pings
     conn = uuid.uuid4().hex[:8]
     hub.sockets.add(ws)
     await ws.send_json(session.state() | {"seq": None, "t_sent": time.time()})
@@ -69,7 +71,8 @@ async def interpreter_socket(ws: WebSocket) -> None:
                 continue
             t_recv = time.time()
             kind = msg.get("type") if isinstance(msg, dict) else None
-            offset = statistics.median(offsets) if offsets else None
+            # The smallest sample has the least queueing in it (as in NTP).
+            offset = min(offsets) if offsets else None
 
             if kind == "transcript":
                 text, seq = msg.get("text"), msg.get("seq")
@@ -78,12 +81,14 @@ async def interpreter_socket(ws: WebSocket) -> None:
                         {"type": "error", "message": "transcript needs text and seq"}
                     )
                     continue
+                t_audio = msg.get("t_audio")
+                now = float(t_audio) if isinstance(t_audio, (int, float)) else t_recv
                 if not msg.get("is_final", False):
                     await ws.send_json(
-                        {"type": "preview", "seq": seq, "candidates": session.preview(text, t_recv)}
+                        {"type": "preview", "seq": seq, "candidates": session.preview(text, now)}
                     )
                     continue
-                changed = session.process_final(text, now=t_recv, seq=seq)
+                changed = session.process_final(text, now=now, seq=seq)
                 t_done = time.time()
                 t_sent = None
                 if changed:
