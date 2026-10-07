@@ -6,8 +6,9 @@ Done so far:
 
 - **Stage 1:** the reference detector. It takes one transcript segment and returns the Bible references mentioned in it.
 - **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen, packaged with Docker.
+- **Stage 3:** speech input. Chrome's Web Speech API transcribes Korean in the browser, and a minimal STT check page at `/ui/stt-check/` sends the segments to the server. Testing it, BlackHole setup and the evaluation procedure are in [docs/stt-testing.md](../../docs/stt-testing.md).
 
-The screen, speech input, reading confirmation and the LLM come in later stages.
+The interpreter screen, reading confirmation and the LLM come in later stages.
 
 ## Setup and tests
 
@@ -34,6 +35,8 @@ curl "127.0.0.1:8000/api/verses?ref=John+3:16"
 - **Bible text:** the server loads `data/bible_data.js` if it exists. That file is your local NKJV and 개역한글, gitignored. Otherwise it uses the public-domain KJV sample.
 - **Settings:** set them with environment variables. They are listed in [app/config.py](app/config.py) and include the display threshold, quote search, the pending window and the log folder.
 - **Protocol:** the WebSocket protocol (`/ws`) and the REST endpoints are described in the design document, section 3.14.
+
+The frontend in `realtime/frontend` is served at `http://127.0.0.1:8000/ui/`. The STT check page is `http://127.0.0.1:8000/ui/stt-check/`. It is not in the Docker image yet; that comes in stage 4.
 
 To replay a recorded transcript into a running server and print every screen change, with no transcript text:
 
@@ -92,6 +95,12 @@ app/detect/versification.*  chapter and verse counts (numbers only, from the KJV
 app/detect/parser.py        tokenizer and absolute references
 app/detect/context.py       relative references ("17절", "다음 절", "next verse")
 app/detect/pipeline.py      detect(): the public entry point
+app/stt/base.py             Segment, SpeechSource, SegmentSink: where speech sources plug in
+eval/play_to_device.py      plays part of a dev sermon into an audio device (needs consent)
+eval/capture_to_segments.py puts a browser capture on the recording timeline
+eval/stt_latency.py         speech end to screen latency for one replay
+../frontend/shared/         Web Speech source, WebSocket client, capture (ES modules)
+../frontend/stt-check/      the STT check page
 scripts/gen_versification.py  rebuilds versification.json from data/sample/kjv.js
 tests/fixtures/parser_cases.jsonl  table of inputs and expected references
 ```
