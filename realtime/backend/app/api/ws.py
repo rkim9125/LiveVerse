@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import statistics
 import time
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -54,8 +55,9 @@ async def interpreter_socket(ws: WebSocket) -> None:
     await ws.accept()
     app = ws.app
     session, hub = app.state.session, app.state.hub
-    latency = getattr(app.state, "latency", None)
+    latency = app.state.latency
     offsets: list[float] = []  # server clock minus client clock, from pings
+    conn = uuid.uuid4().hex[:8]
     hub.sockets.add(ws)
     await ws.send_json(session.state() | {"seq": None, "t_sent": time.time()})
     try:
@@ -83,21 +85,23 @@ async def interpreter_socket(ws: WebSocket) -> None:
                     continue
                 changed = session.process_final(text, now=t_recv, seq=seq)
                 t_done = time.time()
+                t_sent = None
                 if changed:
+                    t_sent = time.time()
                     await hub.broadcast(
-                        session.state() | {"seq": seq, "t_recv": t_recv, "t_sent": time.time()}
+                        session.state() | {"seq": seq, "t_recv": t_recv, "t_sent": t_sent}
                     )
-                if latency is not None:
-                    latency.segment(
-                        seq=seq,
-                        t_client=msg.get("t_client"),
-                        t_recv=t_recv,
-                        t_detect_done=t_done,
-                        t_sent=time.time() if changed else None,
-                        clock_offset=offset,
-                        shown_changed=changed,
-                        shown=session.state()["shown"]["ref"] if session.shown else None,
-                    )
+                latency.segment(
+                    conn=conn,
+                    seq=seq,
+                    t_client=msg.get("t_client"),
+                    t_recv=t_recv,
+                    t_detect_done=t_done,
+                    t_sent=t_sent,
+                    clock_offset=offset,
+                    shown_changed=changed,
+                    shown=str(session.shown.candidate.ref) if session.shown else None,
+                )
 
             elif kind in ("switch", "search", "clear"):
                 try:
@@ -116,8 +120,8 @@ async def interpreter_socket(ws: WebSocket) -> None:
                     )
 
             elif kind == "rendered":
-                if latency is not None and isinstance(msg.get("seq"), int):
-                    latency.rendered(msg["seq"], msg.get("t_render"), offset)
+                if isinstance(msg.get("seq"), int):
+                    latency.rendered(conn, msg["seq"], msg.get("t_render"), offset)
 
             elif kind == "ping":
                 t_client = msg.get("t_client")

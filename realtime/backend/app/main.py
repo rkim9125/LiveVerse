@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import rest, ws
 from app.config import Settings
+from app.core.latency import LatencyLog
 from app.core.session import Session
 from app.core.store import BibleStore
 from app.detect.quotes import QuoteIndex
@@ -34,6 +35,7 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
     quotes = _quote_index(app.state.store) if settings.quote_search else None
     app.state.session = Session(app.state.store, settings, quotes=quotes)
     app.state.hub = ws.Hub()
+    app.state.latency = LatencyLog(settings.log_dir)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):

@@ -106,3 +106,9 @@ def session_state(request: Request) -> dict:
 def session_reset(request: Request) -> dict:
     request.app.state.session.reset()
     return {"status": "reset", "t": time.time()}
+
+
+@router.get("/metrics/latency")
+def latency_summary(request: Request) -> dict:
+    """Today's latency per hop in milliseconds (p50, p95, max)."""
+    return request.app.state.latency.summary()
