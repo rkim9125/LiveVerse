@@ -25,6 +25,8 @@ import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.stt.base import Segment, SegmentSink
+
 router = APIRouter()
 
 
@@ -57,7 +59,7 @@ async def interpreter_socket(ws: WebSocket) -> None:
     await ws.accept()
     app = ws.app
     session, hub = app.state.session, app.state.hub
-    latency = app.state.latency
+    sink = SegmentSink(session, hub.broadcast, app.state.latency)
     offsets: list[float] = []  # receive time minus client send time, from pings
     conn = uuid.uuid4().hex[:8]
     hub.sockets.add(ws)
@@ -75,6 +77,8 @@ async def interpreter_socket(ws: WebSocket) -> None:
             offset = min(offsets) if offsets else None
 
             if kind == "transcript":
+                # The browser is a speech source: its segments go to the same sink a
+                # server side Whisper source would use (app/stt/base.py).
                 text, seq = msg.get("text"), msg.get("seq")
                 if not isinstance(text, str) or not isinstance(seq, int):
                     await ws.send_json(
@@ -82,31 +86,21 @@ async def interpreter_socket(ws: WebSocket) -> None:
                     )
                     continue
                 t_audio = msg.get("t_audio")
-                now = float(t_audio) if isinstance(t_audio, (int, float)) else t_recv
-                if not msg.get("is_final", False):
-                    await ws.send_json(
-                        {"type": "preview", "seq": seq, "candidates": session.preview(text, now)}
-                    )
-                    continue
-                changed = session.process_final(text, now=now, seq=seq)
-                t_done = time.time()
-                t_sent = None
-                if changed:
-                    t_sent = time.time()
-                    await hub.broadcast(
-                        session.state() | {"seq": seq, "t_recv": t_recv, "t_sent": t_sent}
-                    )
-                latency.segment(
-                    conn=conn,
+                t_client = msg.get("t_client")
+                segment = Segment(
+                    text=text,
+                    is_final=bool(msg.get("is_final", False)),
                     seq=seq,
-                    t_client=msg.get("t_client"),
-                    t_recv=t_recv,
-                    t_detect_done=t_done,
-                    t_sent=t_sent,
+                    t_client=t_client if isinstance(t_client, (int, float)) else None,
+                    t_audio=float(t_audio) if isinstance(t_audio, (int, float)) else None,
+                    lang=str(msg.get("lang", "ko-KR")),
+                    conn=conn,
                     clock_offset=offset,
-                    shown_changed=changed,
-                    shown=str(session.shown.candidate.ref) if session.shown else None,
+                    t_recv=t_recv,
                 )
+                reply = await sink.submit(segment)
+                if reply is not None:
+                    await ws.send_json(reply)
 
             elif kind in ("switch", "search", "clear"):
                 try:
@@ -126,7 +120,7 @@ async def interpreter_socket(ws: WebSocket) -> None:
 
             elif kind == "rendered":
                 if isinstance(msg.get("seq"), int):
-                    latency.rendered(conn, msg["seq"], msg.get("t_render"), offset)
+                    app.state.latency.rendered(conn, msg["seq"], msg.get("t_render"), offset)
 
             elif kind == "ping":
                 t_client = msg.get("t_client")
