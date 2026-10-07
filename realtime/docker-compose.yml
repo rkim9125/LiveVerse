@@ -1,0 +1,21 @@
+# Run from realtime/:
+#   VERSION=$(git describe --tags --always) docker compose up --build
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        VERSION: ${VERSION:-unknown}
+    image: liveverse-backend:dev
+    ports:
+      # Published on the host's localhost only. Inside the container requests come
+      # from the Docker network, so the app's own localhost check is turned off.
+      - "127.0.0.1:8000:8000"
+    environment:
+      LIVEVERSE_ALLOW_REMOTE: "on"
+    volumes:
+      - ../data:/srv/data:ro
+      - liveverse-logs:/srv/logs
+
+volumes:
+  liveverse-logs:

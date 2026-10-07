@@ -5,7 +5,7 @@ This folder holds the backend for the realtime sermon assistant. The design is i
 Done so far:
 
 - **Stage 1:** the reference detector. It takes one transcript segment and returns the Bible references mentioned in it.
-- **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen. Docker is still to come.
+- **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen, packaged with Docker.
 
 The screen, speech input, reading confirmation and the LLM come in later stages.
 
@@ -41,6 +41,20 @@ To replay a recorded transcript into a running server and print every screen cha
 uv run python eval/replay.py ~/liveverse-corpus/sermon-01/whisper.prompted.json
 curl 127.0.0.1:8000/api/metrics/latency
 ```
+
+## Docker
+
+```sh
+cd realtime
+VERSION=$(git describe --tags --always) docker compose up --build
+curl 127.0.0.1:8000/api/health
+backend/scripts/check_image.sh liveverse-backend:dev   # the image holds no Bible text
+```
+
+- **Data:** the image contains only the backend code. The repo's `data/` folder is mounted read only at `/srv/data`. The server uses `data/bible_data.js` if it is there, and the KJV sample otherwise.
+- **Network:** the port is published on the host's `127.0.0.1` only. Inside the container, requests arrive from the Docker network, so compose turns off the app's own localhost check (`LIVEVERSE_ALLOW_REMOTE=on`). Without that setting the app refuses every request with 403.
+- **Logs:** latency logs go to the `liveverse-logs` volume.
+- **User:** the container runs as an unprivileged user, and a health check calls `/api/health`.
 
 ## Reproducing the evaluation
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from functools import cache
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/api")
 
 @cache
 def detector_version() -> str:
+    """LIVEVERSE_VERSION (set when the Docker image is built), else git describe."""
+    if os.environ.get("LIVEVERSE_VERSION"):
+        return os.environ["LIVEVERSE_VERSION"]
     try:
         out = subprocess.run(
             ["git", "-C", str(BACKEND), "describe", "--tags", "--always", "--dirty"],
