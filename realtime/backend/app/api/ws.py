@@ -1,0 +1,134 @@
+"""WebSocket protocol for the interpreter screen (design 3.14).
+
+Client to server
+    transcript  {seq, text, is_final, lang?, t_client?}  STT segment
+    switch      {candidate_id}                          show an alternative
+    search      {query}                                 show a typed reference
+    clear       {}                                      empty the screen
+    rendered    {seq, t_render}                         when the screen drew a state
+    ping        {t_client}                              clock offset estimate
+
+Server to client
+    state       session state + seq, t_recv, t_sent     sent to every screen on a change
+    preview     {seq, candidates}                       for interim segments, no change
+    pong        {t_client, t_server}
+    error       {message}
+"""
+
+from __future__ import annotations
+
+import statistics
+import time
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+router = APIRouter()
+
+
+class Hub:
+    """The connected screens. One session, possibly several screens."""
+
+    def __init__(self) -> None:
+        self.sockets: set[WebSocket] = set()
+
+    async def broadcast(self, message: dict) -> None:
+        for ws in list(self.sockets):
+            try:
+                await ws.send_json(message)
+            except (RuntimeError, WebSocketDisconnect):
+                self.sockets.discard(ws)
+
+
+def _is_local(ws: WebSocket) -> bool:
+    from app.main import LOCAL_HOSTS
+
+    host = ws.client.host if ws.client else ""
+    return ws.app.state.settings.allow_remote or host in LOCAL_HOSTS
+
+
+@router.websocket("/ws")
+async def interpreter_socket(ws: WebSocket) -> None:
+    if not _is_local(ws):
+        await ws.close(code=1008, reason="localhost only")
+        return
+    await ws.accept()
+    app = ws.app
+    session, hub = app.state.session, app.state.hub
+    latency = getattr(app.state, "latency", None)
+    offsets: list[float] = []  # server clock minus client clock, from pings
+    hub.sockets.add(ws)
+    await ws.send_json(session.state() | {"seq": None, "t_sent": time.time()})
+    try:
+        while True:
+            try:
+                msg = await ws.receive_json()
+            except ValueError:
+                await ws.send_json({"type": "error", "message": "messages must be JSON objects"})
+                continue
+            t_recv = time.time()
+            kind = msg.get("type") if isinstance(msg, dict) else None
+            offset = statistics.median(offsets) if offsets else None
+
+            if kind == "transcript":
+                text, seq = msg.get("text"), msg.get("seq")
+                if not isinstance(text, str) or not isinstance(seq, int):
+                    await ws.send_json(
+                        {"type": "error", "message": "transcript needs text and seq"}
+                    )
+                    continue
+                if not msg.get("is_final", False):
+                    await ws.send_json(
+                        {"type": "preview", "seq": seq, "candidates": session.preview(text, t_recv)}
+                    )
+                    continue
+                changed = session.process_final(text, now=t_recv, seq=seq)
+                t_done = time.time()
+                if changed:
+                    await hub.broadcast(
+                        session.state() | {"seq": seq, "t_recv": t_recv, "t_sent": time.time()}
+                    )
+                if latency is not None:
+                    latency.segment(
+                        seq=seq,
+                        t_client=msg.get("t_client"),
+                        t_recv=t_recv,
+                        t_detect_done=t_done,
+                        t_sent=time.time() if changed else None,
+                        clock_offset=offset,
+                        shown_changed=changed,
+                        shown=session.state()["shown"]["ref"] if session.shown else None,
+                    )
+
+            elif kind in ("switch", "search", "clear"):
+                try:
+                    if kind == "switch":
+                        changed = session.switch(str(msg.get("candidate_id")), now=t_recv)
+                    elif kind == "search":
+                        changed = session.search(str(msg.get("query", "")), now=t_recv)
+                    else:
+                        changed = session.clear(now=t_recv)
+                except (KeyError, ValueError) as e:
+                    await ws.send_json({"type": "error", "message": str(e).strip("'")})
+                    continue
+                if changed:
+                    await hub.broadcast(
+                        session.state() | {"seq": None, "t_recv": t_recv, "t_sent": time.time()}
+                    )
+
+            elif kind == "rendered":
+                if latency is not None and isinstance(msg.get("seq"), int):
+                    latency.rendered(msg["seq"], msg.get("t_render"), offset)
+
+            elif kind == "ping":
+                t_client = msg.get("t_client")
+                if isinstance(t_client, (int, float)):
+                    offsets.append(t_recv - t_client)
+                    del offsets[:-5]
+                await ws.send_json({"type": "pong", "t_client": t_client, "t_server": t_recv})
+
+            else:
+                await ws.send_json({"type": "error", "message": f"unknown message type {kind!r}"})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        hub.sockets.discard(ws)

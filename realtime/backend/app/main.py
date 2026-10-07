@@ -11,7 +11,7 @@ from functools import cache
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api import rest
+from app.api import rest, ws
 from app.config import Settings
 from app.core.session import Session
 from app.core.store import BibleStore
@@ -33,6 +33,7 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
     app.state.store = store or BibleStore.load(settings.bible_text_path)
     quotes = _quote_index(app.state.store) if settings.quote_search else None
     app.state.session = Session(app.state.store, settings, quotes=quotes)
+    app.state.hub = ws.Hub()
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -42,6 +43,7 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
         return await call_next(request)
 
     app.include_router(rest.router)
+    app.include_router(ws.router)
     return app
 
 
