@@ -2,7 +2,12 @@
 
 This folder holds the backend for the realtime sermon assistant. The design is in [docs/realtime-design.md](../../docs/realtime-design.md).
 
-Stage 1 is done: the reference detector. It takes one transcript segment and returns the Bible references mentioned in it. There is no web server, speech input or Docker yet.
+Done so far:
+
+- **Stage 1:** the reference detector. It takes one transcript segment and returns the Bible references mentioned in it.
+- **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen. Docker is still to come.
+
+The screen, speech input, reading confirmation and the LLM come in later stages.
 
 ## Setup and tests
 
@@ -17,7 +22,38 @@ uv run pytest tests/test_perf.py -s   # print timing
 uv run ruff check . && uv run ruff format --check .
 ```
 
-## Usage
+## Running the server
+
+```sh
+cd realtime/backend
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+curl 127.0.0.1:8000/api/health
+curl "127.0.0.1:8000/api/verses?ref=John+3:16"
+```
+
+- **Bible text:** the server loads `data/bible_data.js` if it exists. That file is your local NKJV and 개역한글, gitignored. Otherwise it uses the public-domain KJV sample.
+- **Settings:** set them with environment variables. They are listed in [app/config.py](app/config.py) and include the display threshold, quote search, the pending window and the log folder.
+- **Protocol:** the WebSocket protocol (`/ws`) and the REST endpoints are described in the design document, section 3.14.
+
+To replay a recorded transcript into a running server and print every screen change, with no transcript text:
+
+```sh
+uv run python eval/replay.py ~/liveverse-corpus/sermon-01/whisper.prompted.json
+curl 127.0.0.1:8000/api/metrics/latency
+```
+
+## Reproducing the evaluation
+
+The detector can change after the evaluation. To score exactly what was evaluated, check out the frozen tag in a separate worktree:
+
+```sh
+git worktree add ../liveverse-eval eval-freeze-v1
+cd ../liveverse-eval/realtime/backend
+uv sync
+uv run python eval/score.py sermon-01 sermon-02 --transcript whisper.prompted.json --name repro --quotes
+```
+
+## Using the detector directly
 
 ```python
 from app.detect.pipeline import detect

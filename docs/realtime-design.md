@@ -264,26 +264,34 @@ class RefResolver(Protocol):
 
 ### 3.14 Protocol
 
-WebSocket `/ws?session=<id>&pin=<pin>`
+One session, kept in memory. The server accepts localhost clients only unless `LIVEVERSE_ALLOW_REMOTE` is on.
+
+WebSocket `/ws`
 
 | Direction | Type | Payload |
 |---|---|---|
-| screen to server | `transcript` | `seq, text, is_final, lang, t_client` |
+| screen to server | `transcript` | `seq, text, is_final, lang?, t_client?, t_audio?`. Interim segments get a preview; only final ones change the state. `t_audio` (time in a recording) replaces the server clock, for replays |
 | screen to server | `switch` | `candidate_id` |
-| screen to server | `search` | `ref` typed by the interpreter |
+| screen to server | `search` | `query` typed by the interpreter (`요 3:16`, `matthew 22:1-14`) |
 | screen to server | `clear` | none |
-| server to screen | `state` | `shown {ref, source, confidence, tentative, verses[{num, ko, en}]}`, `alternatives[...]`, `reading {verse, confidence}`, `t_server` |
+| screen to server | `rendered` | `seq, t_render` when the screen drew a state |
+| screen to server | `ping` | `t_client`, for the clock offset |
+| server to screen | `state` | `shown {id, ref, label, source, confidence, dimmed, tentative, manual, verses[{num, ko, en}]}`, `alternatives[{id, ref, label, source, confidence, dimmed}]`, `spoken {ref}`, `reading`, `names`, `seq, t_recv, t_sent`. Sent to every screen when something changes |
+| server to screen | `preview` | `seq, candidates` for an interim segment |
+| server to screen | `pong`, `error` | |
+
+Every candidate carries its source, so the screen can tell them apart: `rule` (an absolute reference), `context` (a relative one), `quote` (found from quoted words), `llm` (a tentative guess), `manual` (typed or chosen by the interpreter). Stage 5 adds `reading`.
 
 REST
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/health` | liveness, which data set is loaded |
-| GET | `/api/verses?ref=John+3:16-18` | verse lookup |
-| POST | `/api/parse` | debug: run detection on a text and context |
-| POST | `/api/sessions` | start a session, returns id and PIN |
-| GET | `/api/sessions/{id}` | current state |
-| GET | `/api/metrics/latency` | latency summary |
+| GET | `/api/health` | liveness, which data set is loaded, settings, detector version |
+| GET | `/api/verses?ref=John+3:16-18` | verse lookup; accepts the same typed forms as the search box |
+| POST | `/api/detect` | debug: detection on one text with an optional spoken context; the session is not touched |
+| GET | `/api/session` | current state, same shape as the `state` message |
+| POST | `/api/session/reset` | start over, for example before a service |
+| GET | `/api/metrics/latency` | today's latency per hop (p50, p95, max) |
 
 ## 4. Folder structure
 
