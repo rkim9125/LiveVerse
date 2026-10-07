@@ -6,14 +6,24 @@ Run (from realtime/backend):
 
 from __future__ import annotations
 
+from functools import cache
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api import rest
 from app.config import Settings
+from app.core.session import Session
 from app.core.store import BibleStore
+from app.detect.quotes import QuoteIndex
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+@cache
+def _quote_index(store: BibleStore) -> QuoteIndex:
+    """Built once per loaded text (a second or two for the whole Bible)."""
+    return QuoteIndex(store.text)
 
 
 def create_app(settings: Settings | None = None, store: BibleStore | None = None) -> FastAPI:
@@ -21,6 +31,8 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
     app = FastAPI(title="LiveVerse realtime", version="0.2.0")
     app.state.settings = settings
     app.state.store = store or BibleStore.load(settings.bible_text_path)
+    quotes = _quote_index(app.state.store) if settings.quote_search else None
+    app.state.session = Session(app.state.store, settings, quotes=quotes)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
