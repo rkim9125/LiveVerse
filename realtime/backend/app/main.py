@@ -10,14 +10,16 @@ from functools import cache
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import rest, ws
-from app.config import Settings
+from app.config import BACKEND, Settings
 from app.core.latency import LatencyLog
 from app.core.session import Session
 from app.core.store import BibleStore
 from app.detect.quotes import QuoteIndex
 
+FRONTEND = BACKEND.parent / "frontend"
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
@@ -46,6 +48,10 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
 
     app.include_router(rest.router)
     app.include_router(ws.router)
+    if FRONTEND.is_dir():
+        # Same origin as the API, so the page counts as a secure context on localhost
+        # (needed for the microphone) and can open the WebSocket without CORS.
+        app.mount("/ui", StaticFiles(directory=FRONTEND, html=True), name="ui")
     return app
 
 

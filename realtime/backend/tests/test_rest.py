@@ -60,3 +60,9 @@ def test_detect_bad_input(client):
 def test_session_endpoints(client):
     assert client.get("/api/session").json()["shown"] is None
     assert client.post("/api/session/reset").json()["status"] == "reset"
+
+
+def test_frontend_is_served(client):
+    r = client.get("/ui/shared/speech.js")
+    assert r.status_code == 200
+    assert "WebSpeechSource" in r.text
