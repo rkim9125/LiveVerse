@@ -38,7 +38,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -46,10 +45,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.core.models import Reference  # noqa: E402
-from app.detect import versification  # noqa: E402
-from app.detect.books import BY_ABBREV, lookup  # noqa: E402
-from app.detect.pipeline import detect  # noqa: E402
+from app.detect.typed import parse_query  # noqa: E402
 
 AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".mp4", ".webm"}
 PLAY_PADDING_S = 3.0
@@ -159,35 +155,12 @@ def missed_item(sermon: Sermon, at: float, refs: list[str]) -> dict:
     }
 
 
-def _to_ref(part: str) -> Reference:
-    """'mt 22:1-14', 'matthew 22:1-14', '마태복음 22:1-14', '마 22:1-14', '마태복음 22장 1절'."""
-    m = re.fullmatch(r"(.+?)\s*(\d+(?::\d+(?:-\d+)?\+?)?)", part)
-    if m and m.group(1).strip() in BY_ABBREV:
-        return Reference.parse(f"{m.group(1).strip()} {m.group(2)}")
-    if m:
-        book = lookup(m.group(1).strip(), "typed")
-        if book:
-            return Reference.parse(f"{book} {m.group(2)}")
-    found = detect(part, mode="typed")
-    if len(found) == 1:
-        return found[0].ref
-    raise ValueError(f"{part!r}: write it like mt 22:1-14, matthew 22:1-14 or 마태복음 22:1-14")
-
-
 def parse_refs(text: str) -> list[str]:
-    """Validate 'rt 2:1-3, ps 23' against the versification. Raises ValueError."""
+    """Validate 'rt 2:1-3, 마태복음 22:1-14' against the versification. Raises ValueError."""
     refs = []
     for part in text.split(","):
-        part = " ".join(part.strip().lower().split())
-        if not part:
-            continue
-        ref = _to_ref(part)
-        verses = versification.verse_count(ref.book, ref.chapter)
-        if verses is None:
-            raise ValueError(f"{part}: no such chapter")
-        if ref.last_verse is not None and ref.last_verse > verses:
-            raise ValueError(f"{part}: chapter {ref.chapter} has {verses} verses")
-        refs.append(str(ref))
+        if part.strip():
+            refs.append(str(parse_query(part)))
     if not refs:
         raise ValueError("no reference given")
     return refs
