@@ -132,7 +132,16 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
     return timeline
 
 
-def score_sermon(sermon: str, transcript_name: str) -> dict:
+def score_sermon(
+    sermon: str,
+    transcript_name: str,
+    t_from: float | None = None,
+    t_to: float | None = None,
+    slack: float = SLACK_S,
+) -> dict:
+    """Score one sermon. t_from / t_to limit scoring to part of the recording
+    (for example a 10 minute replay); slack widens the time matching, for
+    transcripts whose times are approximate (Web Speech has no word times)."""
     d = corpus_dir() / sermon
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
     labels = [
@@ -142,13 +151,19 @@ def score_sermon(sermon: str, transcript_name: str) -> dict:
         and not (c.get("label_source") == "user" and c.get("review_status") == "unsure")
     ]
     preds = predictions(d / transcript_name)
+    if t_from is not None:
+        labels = [c for c in labels if c["t_end"] > t_from]
+        preds = [p for p in preds if p[1] > t_from]
+    if t_to is not None:
+        labels = [c for c in labels if c["t_start"] < t_to]
+        preds = [p for p in preds if p[0] < t_to + slack]
     meta_path = d / "meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
 
     window_preds: dict[str, set[str]] = {c["id"]: set() for c in labels}
     unlabeled_fp = 0
     for start, end, ref in preds:
-        hit = [c for c in labels if c["t_start"] - SLACK_S < end and c["t_end"] + SLACK_S > start]
+        hit = [c for c in labels if c["t_start"] - slack < end and c["t_end"] + slack > start]
         if not hit:
             unlabeled_fp += 1
             continue
@@ -239,13 +254,20 @@ def main() -> None:
     p.add_argument("--transcript", default="whisper.json")
     p.add_argument("--name", required=True, help="report name, e.g. baseline")
     p.add_argument("--quotes", action="store_true", help="also find verses quoted without a number")
+    p.add_argument(
+        "--from", dest="t_from", type=float, help="score from this second of the recording"
+    )
+    p.add_argument("--to", dest="t_to", type=float, help="score up to this second")
+    p.add_argument("--slack", type=float, default=SLACK_S, help="time matching slack in seconds")
     args = p.parse_args()
     if args.quotes:
         from app.core import bible_text
 
         QUOTES["index"] = QuoteIndex(bible_text.load())
 
-    per = [score_sermon(s, args.transcript) for s in args.sermons]
+    per = [
+        score_sermon(s, args.transcript, args.t_from, args.t_to, args.slack) for s in args.sermons
+    ]
     keys = (
         "labels",
         "gold_refs",
@@ -278,6 +300,8 @@ def main() -> None:
         "at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
         "transcript": args.transcript,
+        "range": [args.t_from, args.t_to],
+        "slack": args.slack,
         "quotes": args.quotes,
         "total": total,
         "per_sermon": per,
@@ -291,6 +315,14 @@ def main() -> None:
     print(f"wrote {out} and {out.with_suffix('.md').name}")
 
 
+def fmt_range(r: list | None) -> str:
+    if not r or (r[0] is None and r[1] is None):
+        return "whole recording"
+    a = "start" if r[0] is None else f"{r[0]:.0f} s"
+    b = "end" if r[1] is None else f"{r[1]:.0f} s"
+    return f"{a} to {b}"
+
+
 def markdown(report: dict) -> str:
     t = report["total"]
     sources = ", ".join(f"{k} {v}" for k, v in t["label_sources"].items())
@@ -299,6 +331,7 @@ def markdown(report: dict) -> str:
         "",
         f"- Date: {report['at'][:10]}, code git {report['git_commit']}",
         f"- Transcript: {report['transcript']}",
+        f"- Range: {fmt_range(report.get('range'))}, time slack {report.get('slack', SLACK_S):g} s",
         f"- Labels: {t['labels']} windows ({sources}), {t['gold_refs']} gold refs",
         f"- Dedup: a repeated ref detected within {DEDUP_S:.0f} s counts as found",
         f"- Chapter candidates hidden behind a verse of the same chapter: {t['superseded']}"
