@@ -157,3 +157,47 @@ def test_reset(session):
     session.process_final("요한복음 3장 16절", now=0)
     session.reset()
     assert session.state()["shown"] is None and session.spoken is None
+
+
+# A book said with a chapter it does not have ("로마서 17장"; Romans has 16).
+
+
+@pytest.mark.parametrize(
+    "text", ["로마서 17장입니다", "로마서 17장 1절", "로마서 17장 1절 말씀입니다"]
+)
+def test_out_of_range_chapter_keeps_the_screen_and_moves_spoken_to_the_book(session, text):
+    session.process_final("요한복음 3장 16절 말씀입니다", now=0)
+    session.process_final(text, now=5)
+    assert shown(session) == "jo 3:16"  # the bug showed jo 17 or jo 17:1 here
+    assert session.spoken is None and session.spoken_book == "rm"
+    assert session.state()["spoken"] == {"ref": None, "book": "rm"}
+
+
+def test_out_of_range_guess_is_a_low_confidence_alternative(session):
+    session.process_final("요한복음 3장 16절", now=0)
+    session.process_final("로마서 17장 1절", now=5)
+    alt = session.state()["alternatives"][0]
+    assert (alt["ref"], alt["guess"]) == ("rm 7:1", True)
+    assert alt["confidence"] < session.settings.show_threshold
+    assert shown(session) == "jo 3:16"
+    assert session.switch(alt["id"], now=6)  # one click shows it
+    assert shown(session) == "rm 7:1"
+
+
+def test_relative_mentions_after_out_of_range_use_the_book(session):
+    session.process_final("요한복음 3장 16절", now=0)
+    session.process_final("로마서 17장 1절", now=5)
+    session.process_final("2절을 보면", now=8)  # no chapter known: nothing, never jo 3:2
+    assert shown(session) == "jo 3:16"
+    assert session.spoken_book == "rm"
+    session.process_final("8장 28절을 보면", now=10)
+    assert shown(session) == "rm 8:28"
+    assert str(session.spoken) == "rm 8:28" and session.spoken_book is None
+    session.process_final("29절", now=12)
+    assert shown(session) == "rm 8:29"
+
+
+def test_search_clears_book_only_position(session):
+    session.process_final("로마서 17장", now=0)
+    session.search("요 3:16", now=1)
+    assert session.spoken_book is None and str(session.spoken) == "jo 3:16"

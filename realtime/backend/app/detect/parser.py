@@ -21,6 +21,10 @@ from app.detect.normalize import Normalized
 CONF_VERSE = 0.9
 CONF_CHAPTER = 0.75
 CONF_FALLBACK = 0.4
+# A book said with a chapter or verse it does not have ("로마서 17장"). A guess
+# with the first digit dropped (7장, as if STT added a digit) is offered as an
+# alternative only, never shown by itself.
+CONF_GUESS = 0.3
 FUZZY_PENALTY = 0.15  # a near-match book name is less certain than an exact one
 
 # How far (in normalized characters) a book name can be from a later "3장"
@@ -81,6 +85,9 @@ class RawMention:
     "chapter", "next_verse", "prev_verse", "next_chapter", "last_verse".
     "block" marks a chapter said after an unconfirmed book name: it is not
     resolved, and relative mentions after it in the segment are dropped.
+    "out_of_range" marks a confirmed book with a chapter or verse it does not
+    have: book is set, ref holds a guess if one exists, and the spoken position
+    moves to that book.
     start and end are offsets into the normalized text.
     """
 
@@ -95,6 +102,7 @@ class RawMention:
     last_verse: bool = False
     confidence: float = 0.0
     fuzzy_from: str | None = None
+    book: str | None = None
 
 
 @dataclass
@@ -279,6 +287,25 @@ def make_absolute(book: str, spec: _Spec) -> tuple[Reference, float] | None:
     return Reference(book, chapter, v1, v2, spec.open_ended), CONF_VERSE
 
 
+def _drop_first_digit(n: int | None) -> int | None:
+    return int(str(n)[1:]) if n is not None and n >= 10 and str(n)[1] != "0" else n
+
+
+def guess_in_range(book: str, spec: _Spec) -> Reference | None:
+    """For a spec make_absolute rejected: the reference with the first digit of
+    the out of range number dropped (로마서 17장 1절 -> 7:1), if that exists."""
+    count = versification.verse_count(book, spec.chapter)
+    if count is None:
+        chapter, v1 = _drop_first_digit(spec.chapter), spec.verse_start
+    else:
+        chapter, v1 = spec.chapter, _drop_first_digit(spec.verse_start)
+    if (chapter, v1) == (spec.chapter, spec.verse_start) or not chapter or v1 == 0:
+        return None
+    guess = _Spec(chapter, v1, None, spec.open_ended, spec.last_verse)
+    made = make_absolute(book, guess)
+    return made[0] if made else None
+
+
 def parse(
     norm: Normalized, mode: Mode = "spoken", known_books: frozenset[str] = frozenset()
 ) -> ParseResult:
@@ -299,7 +326,22 @@ def parse(
     ) -> bool:
         made = make_absolute(book, spec)
         if made is None:
-            return False
+            if fuzzy_from:
+                return False
+            # The book is certain but the numbers are not: keep the book, and do
+            # not let the numbers fall back to another book's context.
+            end = toks[end_tok - 1].end
+            out.append(
+                RawMention(
+                    "out_of_range",
+                    start,
+                    end,
+                    ref=guess_in_range(book, spec),
+                    confidence=CONF_GUESS,
+                    book=book,
+                )
+            )
+            return True
         ref, conf = made
         if fuzzy_from:
             conf -= FUZZY_PENALTY
@@ -343,6 +385,11 @@ def parse(
                 if book and reader.adjacent(i, j):
                     spec = reader.chapter_spec(j)
                     if spec and emit_abs(book, spec, t.start, spec.next_index, fuzzy_from=t.text):
+                        i, pending = spec.next_index, None
+                        continue
+                    if spec:
+                        # A near match whose numbers do not fit: unconfirmed, so block.
+                        out.append(RawMention("block", t.start, toks[spec.next_index - 1].end))
                         i, pending = spec.next_index, None
                         continue
                 elif looks_like_book(t.text) and reader.adjacent(i, j):

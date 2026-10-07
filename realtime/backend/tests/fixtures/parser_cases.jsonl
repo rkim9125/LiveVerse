@@ -147,3 +147,14 @@
 {"id": "ko-range-005", "lang": "ko", "mode": "spoken", "input": "룻기 2장 4절 3절은", "context": null, "expect": [{"ref": "rt 2:4"}, {"ref": "rt 2:3"}], "tags": ["range", "out-of-order"]}
 {"id": "ko-range-006", "lang": "ko", "mode": "spoken", "input": "1절과 4절을 보면", "context": "rt 4", "expect": [{"ref": "rt 4:1"}, {"ref": "rt 4:4"}], "tags": ["range", "skipped"]}
 {"id": "ko-superseded-001", "lang": "ko", "mode": "spoken", "input": "이사야 40장입니다. 이사야 40장 27절", "context": null, "expect": [{"ref": "is 40"}, {"ref": "is 40:27"}], "tags": ["superseded"]}
+{"id": "ko-oor-001", "lang": "ko", "mode": "spoken", "input": "로마서 17장입니다", "context": "jo 3:16", "expect": [], "guesses": ["rm 7"], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-002", "lang": "ko", "mode": "spoken", "input": "로마서 17장 1절", "context": "jo 3:16", "expect": [], "guesses": ["rm 7:1"], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-003", "lang": "ko", "mode": "spoken", "input": "로마서 17장 1절 말씀입니다", "context": "jo 17:1", "expect": [], "guesses": ["rm 7:1"], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-004", "lang": "ko", "mode": "spoken", "input": "로마서를 보면 17장 1절", "context": "jo 3:16", "expect": [], "guesses": ["rm 7:1"], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-005", "lang": "ko", "mode": "spoken", "input": "로마서 8장 41절", "context": "jo 3:16", "expect": [], "guesses": ["rm 8:1"], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-006", "lang": "ko", "mode": "spoken", "input": "로마서 8장 40절", "context": "jo 3:16", "expect": [], "guesses": [], "spoken_book": "rm", "tags": ["out_of_range"]}
+{"id": "ko-oor-007", "lang": "ko", "mode": "spoken", "input": "로마서 17장 1절, 그리고 3장 1절", "context": "jo 3:16", "expect": [{"ref": "rm 3:1", "kind": "relative"}], "guesses": ["rm 7:1"], "spoken_book": null, "tags": ["out_of_range"]}
+{"id": "ko-oor-008", "lang": "ko", "mode": "spoken", "input": "2절을 보면", "context": null, "expect": [], "guesses": [], "spoken_book": "rm", "tags": ["out_of_range"], "context_book": "rm"}
+{"id": "ko-oor-009", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": null, "expect": [], "guesses": [], "spoken_book": "rm", "tags": ["out_of_range"], "context_book": "rm"}
+{"id": "ko-oor-010", "lang": "ko", "mode": "spoken", "input": "8장 28절을 보면", "context": null, "expect": [{"ref": "rm 8:28", "kind": "relative", "confidence": "high"}], "guesses": [], "spoken_book": null, "tags": ["out_of_range"], "context_book": "rm"}
+{"id": "ko-oor-011", "lang": "ko", "mode": "spoken", "input": "요한복음 17장 1절", "context": null, "context_book": "rm", "expect": [{"ref": "jo 17:1", "kind": "absolute"}], "guesses": [], "spoken_book": null, "tags": ["out_of_range"]}

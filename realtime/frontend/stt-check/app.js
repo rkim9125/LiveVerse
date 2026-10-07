@@ -64,8 +64,9 @@ function renderState(state) {
     ...state.alternatives.map((alt) => {
       const li = document.createElement("li");
       const button = document.createElement("button");
-      button.textContent = `${alt.ref} · ${alt.source} · ${alt.confidence}`;
-      if (alt.dimmed) button.className = "dimmed";
+      const guess = alt.guess ? " · guess" : "";
+      button.textContent = `${alt.ref} · ${alt.source} · ${alt.confidence}${guess}`;
+      if (alt.dimmed || alt.guess) button.className = "dimmed";
       button.addEventListener("click", () => socket.send({ type: "switch", candidate_id: alt.id }));
       li.append(button);
       return li;

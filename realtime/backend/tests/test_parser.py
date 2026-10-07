@@ -1,13 +1,20 @@
 import pytest
 
 from app.detect.normalize import normalize
-from app.detect.pipeline import detect
+from app.detect.pipeline import analyze
 from tests.fixtures import load_cases
 
 
 @pytest.mark.parametrize("case", load_cases(), ids=lambda c: c["id"])
 def test_fixture(case):
-    mentions = detect(case["input"], lang=case["lang"], mode=case["mode"], context=case["context"])
+    found = analyze(
+        case["input"],
+        lang=case["lang"],
+        mode=case["mode"],
+        context=case["context"],
+        context_book=case.get("context_book"),
+    )
+    mentions = found.mentions
     assert [str(m.ref) for m in mentions] == [e["ref"] for e in case["expect"]]
     for mention, exp in zip(mentions, case["expect"], strict=True):
         if "kind" in exp:
@@ -16,6 +23,11 @@ def test_fixture(case):
             assert mention.matched_text == exp["matched"]
         if "confidence" in exp:
             assert mention.is_high == (exp["confidence"] == "high")
+    if "guesses" in case:
+        assert [str(g.ref) for g in found.guesses] == case["guesses"]
+        assert all(not g.is_high for g in found.guesses)
+    if "spoken_book" in case:
+        assert found.book == case["spoken_book"]
 
 
 @pytest.mark.parametrize(

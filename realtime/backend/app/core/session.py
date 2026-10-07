@@ -3,6 +3,9 @@
 Two kinds of context (design 3.4):
   spoken  the last reference said, including chapters said in passing.
           Relative mentions ("17절", "다음 절") are resolved against it.
+          After a book said with a chapter it does not have ("로마서 17장"),
+          it is that book alone (spoken_book): "3장" then means 로마서 3장,
+          and "2절" means nothing until a chapter is known.
   shown   what is on the interpreter's screen. It changes when a candidate is
           shown at once (display policy) or when the interpreter switches,
           searches or clears.
@@ -30,7 +33,7 @@ from app.core.store import BibleStore
 from app.detect.announce import ANNOUNCE_RE
 from app.detect.books import looks_like_book
 from app.detect.normalize import normalize
-from app.detect.pipeline import detect
+from app.detect.pipeline import analyze
 from app.detect.quotes import QuoteIndex
 from app.detect.typed import parse_query
 from app.llm.base import NullResolver, RefResolver
@@ -57,6 +60,7 @@ class Candidate:
     matched_text: str = ""
     span: tuple[int, int] | None = None  # offsets in the segment text
     fuzzy_from: str | None = None
+    guess: bool = False  # in-range guess for out of range numbers; never shown by itself
 
 
 @dataclass
@@ -83,7 +87,9 @@ class Session:
 
     def reset(self) -> None:
         self.spoken: Reference | None = None
+        self.spoken_book: str | None = None
         self.spoken_announced = False
+        self._last_book: str | None = None  # from the latest _detect()
         self.shown: Shown | None = None
         self.known_books: set[str] = set()
         self.candidates: deque[Candidate] = deque(maxlen=self.settings.max_candidates)
@@ -99,7 +105,10 @@ class Session:
         return f"c{self._next_id}"
 
     def _detect(self, text: str, seq: int | None, now: float) -> list[Candidate]:
-        mentions = detect(text, context=self.spoken, known_books=self.known_books)
+        found = analyze(
+            text, context=self.spoken, context_book=self.spoken_book, known_books=self.known_books
+        )
+        self._last_book = found.book
         cands = [
             Candidate(
                 id=self._new_id(),
@@ -113,7 +122,22 @@ class Session:
                 span=m.span,
                 fuzzy_from=m.fuzzy_from,
             )
-            for m in mentions
+            for m in found.mentions
+        ]
+        cands += [
+            Candidate(
+                id=self._new_id(),
+                ref=m.ref,
+                source="rule",
+                confidence=m.confidence,
+                t=now,
+                seq=seq,
+                matched_text=m.matched_text,
+                span=m.span,
+                guess=True,
+            )
+            for m in found.guesses
+            if all(c.ref != m.ref for c in cands)
         ]
         if self.quotes is not None:
             quoted = self.quotes.find(text, spoken=self.spoken, announced=self.spoken_announced)
@@ -139,7 +163,7 @@ class Session:
 
     def _gate_chapters(self, cands: list[Candidate], text: str, now: float) -> None:
         for c in cands:
-            if c.ref.verse_start is not None or c.source == "quote" or c.superseded:
+            if c.ref.verse_start is not None or c.source == "quote" or c.superseded or c.guess:
                 continue
             copula = c.span is not None and _COPULA_RE.match(text[c.span[1] :])
             if copula or self._announced_recently(now):
@@ -157,7 +181,8 @@ class Session:
                 c.pending_until = None  # stays dimmed
                 continue
             verse_of_it = any(
-                n.ref.verse_start is not None
+                not n.guess
+                and n.ref.verse_start is not None
                 and (n.ref.book, n.ref.chapter) == (c.ref.book, c.ref.chapter)
                 for n in cands
             )
@@ -187,6 +212,7 @@ class Session:
     def _showable(self, c: Candidate) -> bool:
         return (
             not c.dimmed
+            and not c.guess
             and not c.superseded
             and c.confidence >= self.settings.show_threshold
             and not self._repeats_shown(c)
@@ -215,9 +241,12 @@ class Session:
             for g in self.resolver.resolve(text, self.spoken):
                 cands.append(Candidate(self._new_id(), g.ref, "llm", g.confidence, now, seq))
 
-        if cands:
-            self.spoken = cands[-1].ref
-            self.spoken_announced = not cands[-1].dimmed
+        said = [c for c in cands if not c.guess]
+        if self._last_book is not None and not any(c.source == "quote" for c in said):
+            self.spoken, self.spoken_book, self.spoken_announced = None, self._last_book, False
+        elif said:
+            self.spoken, self.spoken_book = said[-1].ref, None
+            self.spoken_announced = not said[-1].dimmed
         for c in cands:
             self.candidates.appendleft(c)
 
@@ -241,7 +270,7 @@ class Session:
         ref = parse_query(query)
         c = Candidate(self._new_id(), ref, "manual", 1.0, now)
         self.candidates.appendleft(c)
-        self.spoken, self.spoken_announced = ref, True
+        self.spoken, self.spoken_book, self.spoken_announced = ref, None, True
         return self._show(c, now, manual=True, reason="search")
 
     def clear(self, now: float) -> bool:
@@ -262,6 +291,7 @@ class Session:
             "confidence": round(c.confidence, 2),
             "dimmed": c.dimmed,
             "fuzzy_from": c.fuzzy_from,
+            "guess": c.guess,
         }
 
     def state(self) -> dict:
@@ -291,7 +321,13 @@ class Session:
             "type": "state",
             "shown": shown,
             "alternatives": alternatives,
-            "spoken": {"ref": str(self.spoken)} if self.spoken else None,
+            "spoken": (
+                {"ref": str(self.spoken)}
+                if self.spoken
+                else {"ref": None, "book": self.spoken_book}
+                if self.spoken_book
+                else None
+            ),
             "reading": (
                 {
                     "ref": str(reading.ref),

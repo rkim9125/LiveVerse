@@ -145,12 +145,18 @@ class SpeechSource(Protocol):
 - **Near-match names:** an unknown word right before a chapter number is compared with the 66 book names by jamo edit distance.
   - Close matches are accepted.
   - Looser matches are accepted only for a book already shown in this service.
-  - A word that looks like a book name but cannot be confirmed blocks the old context, so its chapter is not read as a chapter of the previous book.
+  - A word that looks like a book name but cannot be confirmed blocks the old context, so its chapter is not read as a chapter of the previous book. The same holds for a near match whose chapter or verse does not exist in that book.
+- **Numbers out of range:** a book said clearly with a chapter or verse it does not have ("로마서 17장"; Romans has 16 chapters).
+  - Nothing is shown, and the screen does not change.
+  - The numbers are never attached to the previous book. Before this rule, "로마서 17장 1절" after John showed John 17:1.
+  - The spoken position moves to that book with no chapter (see 3.4).
+  - STT may have added a digit ("7장" heard as "17장"). If dropping the first digit of the out of range number gives a real passage (Romans 7:1), it is offered as a low confidence alternative marked `guess`. It is never shown by itself; the interpreter can pick it in one click.
 - **Ranges:** verses said in a row become one range ("19절 20절", "1절 5절까지").
 
 ### 3.4 Context: two kinds
 
 - **Spoken position:** the last reference the preacher said, including chapters said in passing. Relative mentions ("2절", "다음 절") are resolved against it.
+- **Book only:** after a book said with an out of range chapter, the spoken position is that book with no chapter. A later "3장" resolves to that book's chapter 3. Verse level mentions ("2절", "다음 절") have no chapter to attach to and produce nothing until a chapter is said.
 - **Shown passage:** what is on the interpreter's screen now. It is used to hide a chapter said again while one of its verses is shown, and to allow looser near-match names.
 - Evaluation showed that resolving relative mentions only against the shown passage loses the preacher's position. For example, "이제 2장에 보면" moves the preacher back to chapter 2 even though it is not worth showing.
 
@@ -276,7 +282,7 @@ WebSocket `/ws`
 | screen to server | `clear` | none |
 | screen to server | `rendered` | `seq, t_render` when the screen drew a state |
 | screen to server | `ping` | `t_client`, for the clock offset |
-| server to screen | `state` | `shown {id, ref, label, source, confidence, dimmed, tentative, manual, verses[{num, ko, en}]}`, `alternatives[{id, ref, label, source, confidence, dimmed}]`, `spoken {ref}`, `reading`, `names`, `seq, t_recv, t_sent`. Sent to every screen when something changes |
+| server to screen | `state` | `shown {id, ref, label, source, confidence, dimmed, tentative, manual, verses[{num, ko, en}]}`, `alternatives[{id, ref, label, source, confidence, dimmed, guess}]`, `spoken {ref}` (or `{ref: null, book}` when only the book is known), `reading`, `names`, `seq, t_recv, t_sent`. Sent to every screen when something changes |
 | server to screen | `preview` | `seq, candidates` for an interim segment |
 | server to screen | `pong`, `error` | |
 

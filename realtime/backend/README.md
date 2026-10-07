@@ -121,6 +121,10 @@ Each line in `tests/fixtures/parser_cases.jsonl` is one case:
 - **Book codes:** they are the app abbreviations listed in `app/detect/books.py`.
 - **`context`:** the reference on the display, or `null`.
 - **Empty `expect`:** an empty list means nothing should be detected.
+- **Out of range cases (optional):**
+  - `context_book`: a book with no chapter as the spoken position, in place of `context`
+  - `guesses`: the low confidence alternatives expected for numbers a book does not have
+  - `spoken_book`: the book left as the spoken position after the segment, or `null`
 - **Optional fields in `expect`:** `kind`, `matched` and `confidence`. `confidence` is `high` or `low`, and `high` means 0.7 or above.
 - **Copyright:** inputs are sentences that name a reference. Never put Bible text in fixtures.
 

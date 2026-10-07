@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.config import BACKEND
 from app.core.models import Reference
-from app.detect.pipeline import detect
+from app.detect.pipeline import analyze
 from app.detect.typed import parse_query
 
 router = APIRouter(prefix="/api")
@@ -66,6 +66,7 @@ class DetectRequest(BaseModel):
     text: str
     mode: str = "spoken"
     spoken: str | None = None  # e.g. "jo 3:16"; context for relative mentions
+    spoken_book: str | None = None  # e.g. "rm" after "로마서 17장"; replaces spoken
     known_books: list[str] = []
 
 
@@ -78,7 +79,13 @@ def detect_text(request: Request, body: DetectRequest) -> dict:
         spoken = Reference.parse(body.spoken) if body.spoken else None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    mentions = detect(body.text, mode=body.mode, context=spoken, known_books=set(body.known_books))
+    found = analyze(
+        body.text,
+        mode=body.mode,
+        context=spoken,
+        context_book=body.spoken_book,
+        known_books=set(body.known_books),
+    )
     quotes = request.app.state.session.quotes
     quoted = quotes.find(body.text, spoken=spoken) if quotes else None
     return {
@@ -93,8 +100,13 @@ def detect_text(request: Request, body: DetectRequest) -> dict:
                 "fuzzy_from": m.fuzzy_from,
                 "superseded": m.superseded,
             }
-            for m in mentions
+            for m in found.mentions
         ],
+        "guesses": [
+            {"ref": str(g.ref), "confidence": g.confidence, "matched_text": g.matched_text}
+            for g in found.guesses
+        ],
+        "spoken_book": found.book,
         "quote": {"ref": str(quoted.ref), "source": "quote", "confidence": quoted.confidence}
         if quoted
         else None,

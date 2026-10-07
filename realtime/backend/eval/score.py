@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.detect.announce import TimedSegment, dimmed_chapters  # noqa: E402
-from app.detect.pipeline import detect  # noqa: E402
+from app.detect.pipeline import analyze  # noqa: E402
 from app.detect.quotes import QuoteIndex  # noqa: E402
 
 SLACK_S = 1.0  # seconds of tolerance when matching a detection to a label window
@@ -108,13 +108,16 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
     not worth displaying). Books count as shown only for candidates that were not
     dimmed, as if the interpreter clicked each of those."""
     context = None
+    context_book = None  # a book said with a chapter it does not have
     context_announced = False  # the context chapter was not dimmed
     known_books: set[str] = set()
     timeline = []
     for i, seg in enumerate(segments):
         words = seg.get("words") or []
         text = "".join(w["word"] for w in words) if words else seg["text"]
-        mentions = detect(text, context=context, known_books=known_books)
+        found = analyze(text, context=context, context_book=context_book, known_books=known_books)
+        mentions = found.mentions
+        quoted = None
         if QUOTES["index"] is not None:
             quoted = QUOTES["index"].find(text, spoken=context, announced=context_announced)
             if quoted and all(m.ref != quoted.ref for m in mentions):
@@ -126,8 +129,11 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
             timed.mentions.append((m, start, end))
             context = m.ref
             context_announced = (i, j) not in dimmed
+            context_book = None
             if (i, j) not in dimmed:
                 known_books.add(m.ref.book)
+        if found.book is not None and not (quoted and mentions and mentions[-1] is quoted):
+            context, context_book, context_announced = None, found.book, False
         timeline.append(timed)
     return timeline
 

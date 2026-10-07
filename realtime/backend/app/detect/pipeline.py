@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 
 from app.core.models import Mention, Mode, Reference
-from app.detect.context import resolve
+from app.detect.context import resolve_all
 from app.detect.normalize import normalize
 from app.detect.parser import parse
 
 # Added when the segment contains a phrase like "말씀입니다" or "let's read".
 TRIGGER_BONUS = 0.1
+
+
+@dataclass
+class Detection:
+    """mentions: what detect() returns.
+    guesses: in-range guesses for a book said with numbers it does not have
+      ("로마서 17장 1절" -> 7:1). Alternatives only, never shown by themselves.
+    book: set when the segment ends on such a mention. The spoken position is
+      then that book with no chapter (pass it back as context_book).
+    """
+
+    mentions: list[Mention] = field(default_factory=list)
+    guesses: list[Mention] = field(default_factory=list)
+    book: str | None = None
 
 
 def detect(
@@ -21,6 +35,19 @@ def detect(
     context: Reference | str | None = None,
     known_books: frozenset[str] | set[str] = frozenset(),
 ) -> list[Mention]:
+    """Find Bible references in one transcript segment. See analyze()."""
+    return analyze(text, lang=lang, mode=mode, context=context, known_books=known_books).mentions
+
+
+def analyze(
+    text: str,
+    *,
+    lang: str = "ko",
+    mode: Mode = "spoken",
+    context: Reference | str | None = None,
+    context_book: str | None = None,
+    known_books: frozenset[str] | set[str] = frozenset(),
+) -> Detection:
     """Find Bible references in one transcript segment.
 
     lang is the STT language hint. The parser reads Korean and English in any
@@ -28,15 +55,19 @@ def detect(
     context is the reference currently on the display, used for "17절",
     "다음 절" and similar. known_books are books already shown in this service;
     the displayed book is always included. They allow looser matches for
-    misheard book names.
+    misheard book names. context_book is a book said last with a chapter it
+    does not have; it replaces context.
     """
     if isinstance(context, str):
         context = Reference.parse(context)
+    if context_book is not None:
+        context = None
     norm = normalize(text)
     known = frozenset(known_books) | ({context.book} if context else frozenset())
     result = parse(norm, mode, known)
+    resolved, guessed, book = resolve_all(result.mentions, context, context_book)
     mentions: list[Mention] = []
-    for raw, ref, kind, conf in resolve(result.mentions, context):
+    for raw, ref, kind, conf in resolved:
         if _repeats_displayed_chapter(ref, context):
             continue
         if result.trigger:
@@ -54,7 +85,11 @@ def detect(
                 fuzzy_from=raw.fuzzy_from,
             )
         )
-    return _mark_superseded(mentions)
+    guesses = []
+    for raw, ref, kind, conf in guessed:
+        start, end = norm.original_span(raw.start, raw.end)
+        guesses.append(Mention(ref, kind, norm.original[start:end], (start, end), conf))
+    return Detection(_mark_superseded(mentions), guesses, book)
 
 
 def _repeats_displayed_chapter(ref: Reference, displayed: Reference | None) -> bool:
