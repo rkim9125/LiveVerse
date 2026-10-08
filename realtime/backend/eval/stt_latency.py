@@ -83,6 +83,20 @@ def key(r: dict) -> tuple:
     return (r["conn"], r["seq"], bool(r.get("interim", False)))
 
 
+def render_of(seg: dict, renders: list[dict]) -> dict | None:
+    """The first screen report for this segment's connection and sequence number
+    received after the state was sent. Matching by time, not by the interim flag,
+    also works for pages that do not send the flag."""
+    return next(
+        (
+            r
+            for r in renders
+            if (r["conn"], r["seq"]) == (seg["conn"], seg["seq"]) and r["t"] >= seg["t_sent"]
+        ),
+        None,
+    )
+
+
 def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT_S) -> dict:
     t0, clip = run["t0"], run["clip_start"]
     clip_end = clip + run.get("duration", float("inf"))
@@ -91,11 +105,10 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
         (r for r in records if r.get("event") == "segment" and r.get("t_sent") and r.get("shown")),
         key=lambda r: r["t_sent"],
     )
-    rendered = {
-        (r["conn"], r["seq"], r.get("interim", False)): r
-        for r in records
-        if r.get("event") == "rendered" and r.get("t_render") is not None
-    }
+    renders = sorted(
+        (r for r in records if r.get("event") == "rendered" and r.get("t_render") is not None),
+        key=lambda r: r["t"],
+    )
     hops: dict[str, list[float]] = {"stt": [], "server": [], "render": [], "total": []}
     missed = already = approx = from_interim = 0
     used: set[tuple[str, int]] = set()
@@ -124,7 +137,7 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
         hops["server"].append(seg["t_sent"] - seg["t_recv"])
         if seg.get("t_client") is not None and seg.get("clock_offset") is not None:
             hops["stt"].append(seg["t_client"] + seg["clock_offset"] - speech_end)
-        r = rendered.get(key(seg))
+        r = render_of(seg, renders)
         if r is not None and r.get("clock_offset") is not None:
             t_screen = r["t_render"] + r["clock_offset"]
             hops["render"].append(t_screen - seg["t_sent"])

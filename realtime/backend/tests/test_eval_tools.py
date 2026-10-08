@@ -124,7 +124,14 @@ def test_latency_joins_gold_with_the_log():
             "t_sent": 5011.06,
             "shown": "jo 3:16",
         },
-        {"event": "rendered", "conn": "c", "seq": 3, "t_render": 4011.1, "clock_offset": 1000.0},
+        {
+            "event": "rendered",
+            "conn": "c",
+            "seq": 3,
+            "t": 5011.11,
+            "t_render": 4011.1,
+            "clock_offset": 1000.0,
+        },
         {
             "event": "segment",
             "conn": "c",
@@ -158,12 +165,19 @@ def test_latency_uses_the_interim_update_first():
             "event": "rendered",
             "conn": "c",
             "seq": 3,
-            "interim": True,
+            "t": 5010.53,
             "t_render": 5010.53,
             "clock_offset": 0.0,
         },
         {"event": "segment", **common, "t_client": 5030.0, "t_recv": 5030.0, "t_sent": 5030.01},
-        {"event": "rendered", "conn": "c", "seq": 3, "t_render": 5030.03, "clock_offset": 0.0},
+        {
+            "event": "rendered",
+            "conn": "c",
+            "seq": 3,
+            "t": 5030.03,
+            "t_render": 5030.03,
+            "clock_offset": 0.0,
+        },
     ]
     out = latency.measure(gold, run, records)
     assert out["from_interim"] == 1 and out["hops"]["total"]["max_ms"] == 530
