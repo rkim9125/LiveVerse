@@ -13,7 +13,12 @@ Two kinds of context (design 3.4):
 Display policy (design 3.10): the last showable candidate of a final segment is
 shown at once. Showable means confidence at or above the threshold, not dimmed,
 not superseded by a verse of the same chapter, and not a repeat of the chapter
-already on screen. Interim segments never change the screen.
+already on screen.
+
+Interim display: a verse that is the last showable verse in consecutive interim
+segments (interim_repeats), or stays so for interim_hold_s, is shown marked
+interim. The next final confirms it (same reference in the final), replaces it
+(another pick) or takes it back (neither). Interims never move spoken.
 
 Chapters said in passing (design 3.5): a chapter-only candidate starts dimmed
 unless it is confirmed in the same segment. It is promoted if an announcement
@@ -68,6 +73,7 @@ class Shown:
     candidate: Candidate
     manual: bool = False
     t: float = 0.0
+    interim: bool = False  # shown from interim results, not yet confirmed by a final
 
     @property
     def tentative(self) -> bool:
@@ -90,6 +96,10 @@ class Session:
         self.spoken_book: str | None = None
         self.spoken_announced = False
         self._last_book: str | None = None  # from the latest _detect()
+        self._watch: Candidate | None = None  # verse being watched in interim results
+        self._watch_count = 0
+        self._watch_since = 0.0
+        self._before_interim: Shown | None = None  # screen before an interim display
         self.shown: Shown | None = None
         self.known_books: set[str] = set()
         self.candidates: deque[Candidate] = deque(maxlen=self.settings.max_candidates)
@@ -153,6 +163,83 @@ class Session:
         cands = self._detect(text, None, now)
         self._next_id = saved
         return [self._candidate_view(c) for c in cands]
+
+    # ── interim display ──
+
+    def _end_watch(self) -> None:
+        self._watch, self._watch_count = None, 0
+
+    def process_interim(self, text: str, now: float, seq: int | None = None) -> bool:
+        """Watch an interim segment for a stable verse. Returns True if the
+        screen changed. Spoken, candidates and alternatives are not touched."""
+        if not self.settings.interim_show:
+            return False
+        saved = self._next_id, self._last_book
+        cands = self._detect(text, seq, now)
+        self._next_id, self._last_book = saved
+        verses = [
+            c
+            for c in cands
+            if c.ref.verse_start is not None
+            and c.source in ("rule", "context")
+            and not c.guess
+            and not c.superseded
+            and c.confidence >= self.settings.show_threshold
+        ]
+        if not verses:
+            self._end_watch()
+            return False
+        last = verses[-1]
+        if self._watch is not None and self._watch.ref == last.ref:
+            self._watch_count += 1
+        else:
+            self._watch, self._watch_count, self._watch_since = last, 1, now
+        return self.tick(now)
+
+    def interim_due(self) -> float | None:
+        """When the watched verse will have been held long enough, if it is not
+        shown yet: the caller can call tick() then."""
+        if self._watch is None or self._watched_is_shown():
+            return None
+        return self._watch_since + self.settings.interim_hold_s
+
+    def _watched_is_shown(self) -> bool:
+        return self.shown is not None and self.shown.candidate.ref == self._watch.ref
+
+    def tick(self, now: float) -> bool:
+        """Show the watched verse if it is stable. Returns True if shown."""
+        w = self._watch
+        if w is None or self._watched_is_shown():
+            return False
+        stable = (
+            self._watch_count >= self.settings.interim_repeats
+            or now - self._watch_since
+            >= self.settings.interim_hold_s - 1e-3  # float error at epoch times
+        )
+        if not stable:
+            return False
+        if self.shown is None or not self.shown.interim:
+            self._before_interim = self.shown
+        self.shown = Shown(w, manual=False, t=now, interim=True)
+        self.history.append({"t": now, "ref": str(w.ref), "source": w.source, "reason": "interim"})
+        return True
+
+    def _settle_interim(self, cands: list[Candidate], pick: Candidate | None, now: float) -> bool:
+        """A final arrived while an interim display is on screen."""
+        shown = self.shown
+        same = next((c for c in cands if not c.guess and c.ref == shown.candidate.ref), None)
+        if pick is not None and pick.ref != shown.candidate.ref:
+            return self._show(pick, now, manual=False, reason="mention")
+        if same is not None:
+            self.shown = Shown(same, manual=False, t=now)
+            self.history.append(
+                {"t": now, "ref": str(same.ref), "source": same.source, "reason": "confirm"}
+            )
+            return True
+        self.shown = self._before_interim
+        ref = str(self.shown.candidate.ref) if self.shown else None
+        self.history.append({"t": now, "ref": ref, "source": None, "reason": "revert"})
+        return True
 
     # ── chapters said in passing ──
 
@@ -219,8 +306,10 @@ class Session:
         )
 
     def _show(self, c: Candidate, now: float, manual: bool, reason: str) -> bool:
-        if self.shown and self.shown.candidate.ref == c.ref and self.shown.manual == manual:
+        same = self.shown and self.shown.candidate.ref == c.ref and self.shown.manual == manual
+        if same and not self.shown.interim:
             return False
+        self._before_interim = None
         self.shown = Shown(c, manual=manual, t=now)
         self.known_books.add(c.ref.book)
         self.history.append({"t": now, "ref": str(c.ref), "source": c.source, "reason": reason})
@@ -256,6 +345,9 @@ class Session:
         changed = bool(cands or promoted)
         pick = next((c for c in reversed(cands) if self._showable(c)), None)
         pick = pick or next((c for c in reversed(promoted) if self._showable(c)), None)
+        self._end_watch()
+        if self.shown is not None and self.shown.interim:
+            return self._settle_interim(cands, pick, now) or changed
         if pick is not None:
             changed = self._show(pick, now, manual=False, reason="mention") or changed
         return changed
@@ -264,16 +356,20 @@ class Session:
         c = next((c for c in self.candidates if c.id == candidate_id), None)
         if c is None:
             raise KeyError(candidate_id)
+        self._end_watch()
         return self._show(c, now, manual=True, reason="switch")
 
     def search(self, query: str, now: float) -> bool:
         ref = parse_query(query)
+        self._end_watch()
         c = Candidate(self._new_id(), ref, "manual", 1.0, now)
         self.candidates.appendleft(c)
         self.spoken, self.spoken_book, self.spoken_announced = ref, None, True
         return self._show(c, now, manual=True, reason="search")
 
     def clear(self, now: float) -> bool:
+        self._end_watch()
+        self._before_interim = None
         if self.shown is None:
             return False
         self.shown = None
@@ -305,6 +401,7 @@ class Session:
             shown = self._candidate_view(c) | {
                 "tentative": self.shown.tentative,
                 "manual": self.shown.manual,
+                "interim": self.shown.interim,
                 "verses": verses,
             }
         seen = {shown["ref"]} if shown else set()

@@ -27,9 +27,11 @@ const socket = new LiveVerseSocket(wsUrl, {
   onState: (state) => {
     renderState(state);
     requestAnimationFrame(() => {
-      socket.rendered(state.seq);
+      socket.rendered(state.seq, Boolean(state.from_interim));
       const sent = finalSentAt.get(state.seq);
-      if (sent) {
+      if (state.from_interim) {
+        $("latency").textContent = `interim → screen (server ${Math.round((state.t_sent - state.t_recv) * 1000)} ms)`;
+      } else if (sent) {
         const received = state.t_sent * 1000;
         $("latency").textContent =
           `final → screen ${Math.round(performance.timeOrigin + performance.now() - sent)} ms ` +
@@ -46,6 +48,7 @@ function renderState(state) {
   const shown = state.shown;
   if (!shown) {
     $("shown-ref").textContent = "nothing shown";
+    $("shown-ref").classList.remove("interim");
     $("shown-source").hidden = true;
     $("shown-confidence").textContent = "";
     $("verses").textContent = "";
@@ -53,7 +56,9 @@ function renderState(state) {
     $("shown-ref").textContent = `${shown.label.ko} · ${shown.label.en}`;
     $("shown-source").hidden = false;
     $("shown-source").textContent = shown.manual ? "manual" : shown.source;
-    $("shown-confidence").textContent = `confidence ${shown.confidence}${shown.tentative ? " (tentative)" : ""}`;
+    const marks = [shown.tentative && "tentative", shown.interim && "interim, waiting for the final"].filter(Boolean);
+    $("shown-confidence").textContent = `confidence ${shown.confidence}${marks.length ? ` (${marks.join(", ")})` : ""}`;
+    $("shown-ref").classList.toggle("interim", Boolean(shown.interim));
     const first = shown.verses[0];
     $("verses").textContent = first
       ? `${first.num} ${first.en || first.ko}${shown.verses.length > 1 ? ` … (${shown.verses.length} verses)` : ""}`

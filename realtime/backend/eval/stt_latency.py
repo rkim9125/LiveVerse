@@ -11,7 +11,9 @@ The first segment in the latency log after that moment which changed the screen
 to that reference gives the server times, and its rendered event gives the
 screen time. Each hop is reported as p50 / p95 / max in milliseconds:
 
-    stt        speech end to the client sending the final segment
+    stt        speech end to the client sending the segment that changed the
+               screen (an interim one when interim display showed it first;
+               missing when the hold timer showed it)
     server     server receive to state sent
     render     state sent to drawn on screen
     total      speech end to drawn on screen
@@ -76,6 +78,11 @@ def gold_mentions(labels: list[dict], whisper_preds: list[tuple[float, float, st
     return sorted(out, key=lambda g: g["end"])
 
 
+def key(r: dict) -> tuple:
+    """A final and its interims share a sequence number."""
+    return (r["conn"], r["seq"], bool(r.get("interim", False)))
+
+
 def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT_S) -> dict:
     t0, clip = run["t0"], run["clip_start"]
     clip_end = clip + run.get("duration", float("inf"))
@@ -85,16 +92,16 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
         key=lambda r: r["t_sent"],
     )
     rendered = {
-        (r["conn"], r["seq"]): r
+        (r["conn"], r["seq"], r.get("interim", False)): r
         for r in records
         if r.get("event") == "rendered" and r.get("t_render") is not None
     }
     hops: dict[str, list[float]] = {"stt": [], "server": [], "render": [], "total": []}
-    missed = already = approx = 0
+    missed = already = approx = from_interim = 0
     used: set[tuple[str, int]] = set()
     for g in gold:
         speech_end = t0 + (g["end"] - clip)
-        before = [r for r in sent if r["t_sent"] <= speech_end and r["t_sent"] >= t0]
+        before = [r for r in sent if t0 <= r["t_sent"] < speech_end - 1.0]
         if before and before[-1]["shown"] in g["refs"]:
             already += 1  # the screen already showed it: nothing to wait for
             continue
@@ -103,7 +110,7 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
                 r
                 for r in sent
                 if r["shown"] in g["refs"]
-                and (r["conn"], r["seq"]) not in used
+                and key(r) not in used
                 and speech_end - 1.0 <= r["t_recv"] <= speech_end + wait
             ),
             None,
@@ -112,22 +119,58 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
             missed += 1
             continue
         approx += g["approx"]
-        used.add((seg["conn"], seg["seq"]))
+        from_interim += bool(seg.get("interim"))
+        used.add(key(seg))
         hops["server"].append(seg["t_sent"] - seg["t_recv"])
         if seg.get("t_client") is not None and seg.get("clock_offset") is not None:
             hops["stt"].append(seg["t_client"] + seg["clock_offset"] - speech_end)
-        r = rendered.get((seg["conn"], seg["seq"]))
+        r = rendered.get(key(seg))
         if r is not None and r.get("clock_offset") is not None:
             t_screen = r["t_render"] + r["clock_offset"]
             hops["render"].append(t_screen - seg["t_sent"])
             hops["total"].append(t_screen - speech_end)
+    screen = screen_accuracy(gold, run, sent, wait)
     return {
+        "screen": screen,
         "gold": len(gold),
         "already_shown": already,
         "matched": len(gold) - missed - already,
         "missed": missed,
         "approx_times": approx,
+        "from_interim": from_interim,
         "hops": {k: _stats(v) for k, v in hops.items()},
+    }
+
+
+def screen_accuracy(gold: list[dict], run: dict, sent: list[dict], wait: float = WAIT_S) -> dict:
+    """What the screen did during the run, interim updates included.
+
+    changes   times the screen moved to another passage
+    correct   changes to a gold reference said within the wait before (or 1 s after)
+    reverts   interim displays taken back because the final did not contain them
+    """
+    t0, clip = run["t0"], run["clip_start"]
+    t_end = t0 + run.get("duration", float("inf")) + wait
+    changes = correct = reverts = 0
+    last = None
+    for r in sent:
+        if not t0 <= r["t_sent"] <= t_end:
+            continue
+        if r.get("reason") == "revert":
+            reverts += 1
+        if r["shown"] == last:
+            continue
+        last = r["shown"]
+        changes += 1
+        said = clip + (r["t_sent"] - t0)
+        correct += any(
+            r["shown"] in g["refs"] and said - wait <= g["end"] <= said + 1 for g in gold
+        )
+    return {
+        "changes": changes,
+        "correct": correct,
+        "precision": round(correct / changes, 3) if changes else 0.0,
+        "reverts": reverts,
     }
 
 
@@ -155,7 +198,13 @@ def main() -> None:
     print(
         f"{run['sermon']} from {run['clip_start']:.0f} s: {result['matched']} of "
         f"{result['gold']} gold references reached the screen ({result['already_shown']} "
-        f"already shown, {result['missed']} missed, {result['approx_times']} approximate times)"
+        f"already shown, {result['missed']} missed, {result['approx_times']} approximate times, "
+        f"{result['from_interim']} from interim results)"
+    )
+    sc = result["screen"]
+    print(
+        f"  screen: {sc['changes']} changes, {sc['correct']} correct "
+        f"(precision {sc['precision']}), {sc['reverts']} interim reverts"
     )
     for name, s in result["hops"].items():
         if s:

@@ -235,6 +235,13 @@ class RefResolver(Protocol):
   4. relative reference
   5. LLM guess
 - **Hysteresis:** interim results do not flip the screen back and forth. A new main passage needs a new mention or stronger evidence.
+- **Interim display:** a verse level reference in interim results is shown before the final arrives once it is stable.
+  - Stable means the same reference is the last showable verse in 2 consecutive interim results, or stays there for 0.7 s. Both values are settings (`LIVEVERSE_INTERIM_REPEATS`, `LIVEVERSE_INTERIM_HOLD_S`), and `LIVEVERSE_INTERIM_SHOW=off` turns this off.
+  - Only verse level references with confidence at or above the threshold count. Chapters, guesses and quotes wait for the final.
+  - A passage shown this way is marked interim on screen.
+  - When the final arrives: if it contains the same reference, the mark is removed. If it picks another passage, that passage replaces it. If it contains neither, the screen goes back to what it showed before.
+  - Interim results never move the spoken position; only finals do.
+  - Why: in the stage 3 evaluation, Chrome's Web Speech held finals back until a pause, up to 87 s per segment. Speech end to screen was 2.9 s at p50 and 7.5 s at p95, almost all of it waiting for the final.
 - **Alternatives:** up to 3, small at the side, including dimmed chapters.
 - **Interpreter override:**
   - keys `1` to `3` switch to an alternative
@@ -280,9 +287,9 @@ WebSocket `/ws`
 | screen to server | `switch` | `candidate_id` |
 | screen to server | `search` | `query` typed by the interpreter (`요 3:16`, `matthew 22:1-14`) |
 | screen to server | `clear` | none |
-| screen to server | `rendered` | `seq, t_render` when the screen drew a state |
+| screen to server | `rendered` | `seq, t_render, from_interim` when the screen drew a state |
 | screen to server | `ping` | `t_client`, for the clock offset |
-| server to screen | `state` | `shown {id, ref, label, source, confidence, dimmed, tentative, manual, verses[{num, ko, en}]}`, `alternatives[{id, ref, label, source, confidence, dimmed, guess}]`, `spoken {ref}` (or `{ref: null, book}` when only the book is known), `reading`, `names`, `seq, t_recv, t_sent`. Sent to every screen when something changes |
+| server to screen | `state` | `shown {id, ref, label, source, confidence, dimmed, tentative, manual, interim, verses[{num, ko, en}]}`, `alternatives[{id, ref, label, source, confidence, dimmed, guess}]`, `spoken {ref}` (or `{ref: null, book}` when only the book is known), `reading`, `names`, `seq, t_recv, t_sent, from_interim` (true when an interim result caused the change). Sent to every screen when something changes |
 | server to screen | `preview` | `seq, candidates` for an interim segment |
 | server to screen | `pong`, `error` | |
 

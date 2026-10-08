@@ -253,6 +253,13 @@ test("rendered reports the screen time", () => {
   sock.connect();
   FakeSocket.last.open();
   sock.rendered(4);
-  assert.deepEqual(FakeSocket.last.sent.at(-1), { type: "rendered", seq: 4, t_render: 10 });
+  assert.deepEqual(FakeSocket.last.sent.at(-1), {
+    type: "rendered",
+    seq: 4,
+    t_render: 10,
+    from_interim: false,
+  });
+  sock.rendered(5, true);
+  assert.equal(FakeSocket.last.sent.at(-1).from_interim, true);
   sock.close();
 });

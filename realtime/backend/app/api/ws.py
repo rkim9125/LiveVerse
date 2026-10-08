@@ -8,11 +8,11 @@ Client to server
     switch      {candidate_id}                          show an alternative
     search      {query}                                 show a typed reference
     clear       {}                                      empty the screen
-    rendered    {seq, t_render}                         when the screen drew a state
+    rendered    {seq, t_render, from_interim}           when the screen drew a state
     ping        {t_client}                              clock offset estimate
 
 Server to client
-    state       session state + seq, t_recv, t_sent     sent to every screen on a change
+    state       session state + seq, t_recv, t_sent, from_interim   on every change
     preview     {seq, candidates}                       for interim segments, no change
     pong        {t_client, t_server}
     error       {message}
@@ -120,7 +120,13 @@ async def interpreter_socket(ws: WebSocket) -> None:
 
             elif kind == "rendered":
                 if isinstance(msg.get("seq"), int):
-                    app.state.latency.rendered(conn, msg["seq"], msg.get("t_render"), offset)
+                    app.state.latency.rendered(
+                        conn,
+                        msg["seq"],
+                        msg.get("t_render"),
+                        offset,
+                        interim=bool(msg.get("from_interim", False)),
+                    )
 
             elif kind == "ping":
                 t_client = msg.get("t_client")
@@ -134,4 +140,5 @@ async def interpreter_socket(ws: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        sink.close()
         hub.sockets.discard(ws)

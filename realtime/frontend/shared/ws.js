@@ -3,7 +3,7 @@
 //   const sock = new LiveVerseSocket(url, { onState, onPreview, onStatus, onError });
 //   sock.connect();
 //   sock.sendTranscript({ seq, text, isFinal, tEnd, tAudio });
-//   sock.rendered(seq);   // after the screen drew a state
+//   sock.rendered(seq, fromInterim);   // after the screen drew a state
 
 const RECONNECT_MS = [1000, 2000, 4000, 8000];
 
@@ -85,9 +85,9 @@ export class LiveVerseSocket {
     this.send(msg);
   }
 
-  rendered(seq) {
+  rendered(seq, fromInterim = false) {
     if (seq !== null && seq !== undefined) {
-      this._send({ type: "rendered", seq, t_render: this.now() / 1000 });
+      this._send({ type: "rendered", seq, t_render: this.now() / 1000, from_interim: fromInterim });
     }
   }
 }

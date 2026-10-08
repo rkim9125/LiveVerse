@@ -3,6 +3,8 @@
 One JSON line per event in <log_dir>/latency-YYYYMMDD.jsonl:
   segment   a final transcript segment: client, receive, detect-done and send times
   rendered  when a screen drew the state caused by that segment
+Interim segments are logged only when they change the screen, with
+"interim": true; a final and its interims share a sequence number.
 
 Times are seconds since the epoch. Client times are on the client clock;
 clock_offset (server minus client, from pings) converts them. No transcript
@@ -39,7 +41,14 @@ class LatencyLog:
     def segment(self, conn: str, seq: int, **fields) -> None:
         self._write({"event": "segment", "conn": conn, "seq": seq, "t": time.time(), **fields})
 
-    def rendered(self, conn: str, seq: int, t_render: float | None, clock_offset: float | None):
+    def rendered(
+        self,
+        conn: str,
+        seq: int,
+        t_render: float | None,
+        clock_offset: float | None,
+        interim: bool = False,
+    ):
         self._write(
             {
                 "event": "rendered",
@@ -48,6 +57,7 @@ class LatencyLog:
                 "t": time.time(),
                 "t_render": t_render,
                 "clock_offset": clock_offset,
+                "interim": interim,
             }
         )
 
@@ -59,7 +69,11 @@ class LatencyLog:
             if path.exists()
             else []
         )
-        segments = {(r["conn"], r["seq"]): r for r in records if r["event"] == "segment"}
+        segments = {
+            (r["conn"], r["seq"], r.get("interim", False)): r
+            for r in records
+            if r["event"] == "segment"
+        }
         hops: dict[str, list[float]] = {
             "client_to_server": [],
             "detect": [],
@@ -76,7 +90,7 @@ class LatencyLog:
         for r in records:
             if r["event"] != "rendered" or r.get("t_render") is None:
                 continue
-            s = segments.get((r["conn"], r["seq"]))
+            s = segments.get((r["conn"], r["seq"], r.get("interim", False)))
             if s is None or not s.get("t_sent"):
                 continue
             if r.get("clock_offset") is not None:

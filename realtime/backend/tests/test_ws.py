@@ -22,7 +22,7 @@ def test_initial_state_then_final_segment(client):
         assert state["t_recv"] <= state["t_sent"]
 
 
-def test_interim_gives_preview_only(client):
+def test_one_interim_gives_preview_only(client):
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.send_json({"type": "transcript", "seq": 1, "text": "로마서 8장 28절", "is_final": False})
@@ -85,3 +85,38 @@ def test_remote_socket_is_refused(settings, store):
     with pytest.raises(WebSocketDisconnect):
         with remote.websocket_connect("/ws") as ws:
             ws.receive_json()
+
+
+def interim(ws, seq, text):
+    ws.send_json({"type": "transcript", "seq": seq, "text": text, "is_final": False, "t_client": 0})
+
+
+def test_stable_interim_shows_marked_then_final_confirms(client):
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        interim(ws, 1, "로마서 8장 28절")
+        assert ws.receive_json()["type"] == "preview"
+        interim(ws, 1, "로마서 8장 28절 말씀")
+        state = ws.receive_json()
+        assert state["type"] == "state" and state["from_interim"] is True
+        assert (state["shown"]["ref"], state["shown"]["interim"]) == ("rm 8:28", True)
+        assert ws.receive_json()["type"] == "preview"
+        final(ws, 1, "로마서 8장 28절 말씀입니다")
+        state = ws.receive_json()
+        assert state["from_interim"] is False
+        assert (state["shown"]["ref"], state["shown"]["interim"]) == ("rm 8:28", False)
+
+
+def test_interim_held_without_new_results_is_shown(settings, store):
+    from dataclasses import replace
+
+    client = TestClient(create_app(replace(settings, interim_hold_s=0.05), store))
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        interim(ws, 1, "로마서 8장 28절")
+        assert ws.receive_json()["type"] == "preview"
+        state = ws.receive_json()  # from the hold timer
+        assert state["from_interim"] is True and state["shown"]["interim"] is True
+        ws.send_json({"type": "rendered", "seq": 1, "t_render": 1.0, "from_interim": True})
+    summary = client.get("/api/metrics/latency").json()
+    assert summary["segments"] == 1

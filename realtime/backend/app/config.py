@@ -4,6 +4,9 @@ BIBLE_TEXT_PATH            Bible text file (default: data/bible_data.js, else th
 LIVEVERSE_SHOW_THRESHOLD   confidence needed to show a candidate at once (default 0.7)
 LIVEVERSE_QUOTE_SEARCH     on / off: find verses quoted without a number (default on)
 LIVEVERSE_PENDING_S        seconds a chapter said in passing waits to be confirmed (default 10)
+LIVEVERSE_INTERIM_SHOW     on / off: show a stable verse from interim results (default on)
+LIVEVERSE_INTERIM_REPEATS  consecutive interim results with the same verse to show it (default 2)
+LIVEVERSE_INTERIM_HOLD_S   or seconds the same verse stays in the interim result (default 0.7)
 LIVEVERSE_LOG_DIR          where latency logs go (default realtime/backend/logs)
 LIVEVERSE_ALLOW_REMOTE     on / off: accept clients other than localhost (default off)
 """
@@ -29,6 +32,9 @@ class Settings:
     show_threshold: float = 0.7
     quote_search: bool = True
     pending_s: float = 10.0
+    interim_show: bool = True
+    interim_repeats: int = 2
+    interim_hold_s: float = 0.7
     log_dir: Path = BACKEND / "logs"
     allow_remote: bool = False
     max_candidates: int = 5
@@ -43,6 +49,9 @@ class Settings:
             show_threshold=float(env.get("LIVEVERSE_SHOW_THRESHOLD", 0.7)),
             quote_search=_on(env.get("LIVEVERSE_QUOTE_SEARCH"), True),
             pending_s=float(env.get("LIVEVERSE_PENDING_S", 10.0)),
+            interim_show=_on(env.get("LIVEVERSE_INTERIM_SHOW"), True),
+            interim_repeats=int(env.get("LIVEVERSE_INTERIM_REPEATS", 2)),
+            interim_hold_s=float(env.get("LIVEVERSE_INTERIM_HOLD_S", 0.7)),
             log_dir=Path(env.get("LIVEVERSE_LOG_DIR", BACKEND / "logs")).expanduser(),
             allow_remote=_on(env.get("LIVEVERSE_ALLOW_REMOTE"), False),
         )

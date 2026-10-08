@@ -201,3 +201,97 @@ def test_search_clears_book_only_position(session):
     session.process_final("로마서 17장", now=0)
     session.search("요 3:16", now=1)
     assert session.spoken_book is None and str(session.spoken) == "jo 3:16"
+
+
+# Interim display (design 3.10).
+
+
+def test_two_interims_show_a_verse_marked_interim(session):
+    assert not session.process_interim("요한복음 3장 16절", now=0.0)
+    assert session.process_interim("요한복음 3장 16절 말씀", now=0.3)
+    assert shown(session) == "jo 3:16" and session.shown.interim
+    assert session.state()["shown"]["interim"] is True
+    assert session.spoken is None  # interims never move spoken
+    assert session.state()["alternatives"] == []
+
+
+def test_held_interim_is_shown_by_tick(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    assert session.interim_due() == pytest.approx(0.7)
+    assert not session.tick(0.5)
+    assert session.tick(0.7)
+    assert shown(session) == "jo 3:16" and session.shown.interim
+    assert session.interim_due() is None
+
+
+def test_final_with_same_verse_confirms(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    session.process_interim("요한복음 3장 16절 말씀", now=0.3)
+    assert session.process_final("요한복음 3장 16절 말씀입니다", now=2.0)
+    assert shown(session) == "jo 3:16" and not session.shown.interim
+    assert str(session.spoken) == "jo 3:16"
+    assert [h["reason"] for h in session.history] == ["interim", "confirm"]
+
+
+def test_final_with_another_verse_replaces(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    session.process_interim("요한복음 3장 16절 말씀", now=0.3)
+    session.process_final("요한복음 3장 17절 말씀입니다", now=2.0)
+    assert shown(session) == "jo 3:17" and not session.shown.interim
+
+
+def test_final_without_the_verse_goes_back(session):
+    session.process_final("로마서 8장 28절", now=0.0)
+    session.process_interim("요한복음 3장 16절", now=1.0)
+    session.process_interim("요한복음 3장 16절 말씀", now=1.3)
+    assert shown(session) == "jo 3:16"
+    assert session.process_final("오늘 함께 모였습니다", now=3.0)
+    assert shown(session) == "rm 8:28" and not session.shown.interim
+    assert session.history[-1]["reason"] == "revert"
+
+
+def test_final_without_the_verse_clears_if_nothing_was_shown(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    session.process_interim("요한복음 3장 16절", now=0.3)
+    session.process_final("오늘 함께 모였습니다", now=2.0)
+    assert session.shown is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["요한복음 3장을", "로마서 17장 1절", "오늘 함께 모였습니다"],  # chapter, out of range, none
+)
+def test_interim_needs_a_showable_verse(session, text):
+    session.process_interim(text, now=0.0)
+    assert not session.process_interim(text, now=0.3)
+    assert session.interim_due() is None
+    assert session.shown is None
+
+
+def test_interim_changing_verse_restarts_the_count(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    assert not session.process_interim("요한복음 3장 16절과 로마서 8장 28절", now=0.3)
+    assert session.process_interim("요한복음 3장 16절과 로마서 8장 28절을", now=0.6)
+    assert shown(session) == "rm 8:28"
+
+
+def test_interim_display_can_be_turned_off(settings, store):
+    s = Session(store, replace(settings, interim_show=False))
+    s.process_interim("요한복음 3장 16절", now=0.0)
+    assert not s.process_interim("요한복음 3장 16절", now=0.3)
+    assert not s.tick(5.0) and s.shown is None
+
+
+def test_relative_interim_uses_spoken(session):
+    session.process_final("요한복음 3장 16절", now=0.0)
+    session.process_interim("17절", now=1.0)
+    assert session.process_interim("17절을 보면", now=1.3)
+    assert shown(session) == "jo 3:17" and session.shown.interim
+    assert str(session.spoken) == "jo 3:16"
+
+
+def test_search_ends_the_interim_watch(session):
+    session.process_interim("요한복음 3장 16절", now=0.0)
+    session.search("롬 8:28", now=0.2)
+    assert not session.tick(1.0)
+    assert shown(session) == "rm 8:28" and session.shown.manual

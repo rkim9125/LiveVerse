@@ -9,9 +9,10 @@ and the screens do not change.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from app.core.latency import LatencyLog
@@ -43,24 +44,80 @@ class SegmentSink:
 
     def __init__(self, session: Session, broadcast: Broadcast, latency: LatencyLog):
         self.session, self.broadcast, self.latency = session, broadcast, latency
+        self._timer: asyncio.TimerHandle | None = None
+
+    def close(self) -> None:
+        self._cancel_timer()
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+    async def _send(self, seg: Segment, interim: bool, t_done: float) -> None:
+        t_sent = time.time()
+        await self.broadcast(
+            self.session.state()
+            | {"seq": seg.seq, "t_recv": seg.t_recv, "t_sent": t_sent, "from_interim": interim}
+        )
+        shown = self.session.shown
+        self.latency.segment(
+            conn=seg.conn,
+            seq=seg.seq,
+            t_client=seg.t_client,
+            t_recv=seg.t_recv,
+            t_detect_done=t_done,
+            t_sent=t_sent,
+            clock_offset=seg.clock_offset,
+            shown_changed=True,
+            shown=str(shown.candidate.ref) if shown else None,
+            reason=self.session.history[-1]["reason"] if self.session.history else None,
+            interim=interim,
+        )
+
+    def _schedule_hold(self, seg: Segment, now: float) -> None:
+        """Show the watched verse once it has been held long enough, even if no
+        further interim arrives (the preacher paused after saying it)."""
+        self._cancel_timer()
+        due = self.session.interim_due()
+        if due is None:
+            return
+
+        async def fire() -> None:
+            self._timer = None
+            t0 = time.time()
+            if self.session.tick(due):
+                # No new segment arrived: the speech time is unknown (t_client None).
+                await self._send(replace(seg, t_client=None, t_recv=t0), True, time.time())
+
+        loop = asyncio.get_running_loop()
+        self._timer = loop.call_later(max(0.0, due - now), lambda: loop.create_task(fire()))
 
     async def submit(self, seg: Segment) -> dict | None:
         """Final segments update the session and every screen. Interim segments
-        change nothing; their preview is returned for the sender only."""
+        can show a stable verse (marked interim); their preview is returned for
+        the sender."""
         now = seg.t_audio if seg.t_audio is not None else seg.t_recv
         if not seg.is_final:
+            if self.session.process_interim(seg.text, now, seq=seg.seq):
+                self._cancel_timer()
+                await self._send(seg, True, time.time())
+            else:
+                self._schedule_hold(seg, now)
             return {
                 "type": "preview",
                 "seq": seg.seq,
                 "candidates": self.session.preview(seg.text, now),
             }
+        self._cancel_timer()
         changed = self.session.process_final(seg.text, now=now, seq=seg.seq)
         t_done = time.time()
         t_sent = None
         if changed:
             t_sent = time.time()
             await self.broadcast(
-                self.session.state() | {"seq": seg.seq, "t_recv": seg.t_recv, "t_sent": t_sent}
+                self.session.state()
+                | {"seq": seg.seq, "t_recv": seg.t_recv, "t_sent": t_sent, "from_interim": False}
             )
         shown = self.session.shown
         self.latency.segment(
@@ -73,6 +130,7 @@ class SegmentSink:
             clock_offset=seg.clock_offset,
             shown_changed=changed,
             shown=str(shown.candidate.ref) if shown else None,
+            reason=self.session.history[-1]["reason"] if self.session.history else None,
         )
         return None
 

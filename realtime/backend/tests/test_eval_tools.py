@@ -139,3 +139,44 @@ def test_latency_joins_gold_with_the_log():
     h = out["hops"]
     assert h["stt"]["p50_ms"] == 1000 and h["server"]["p50_ms"] == 10
     assert h["render"]["p50_ms"] == 40 and h["total"]["max_ms"] == 1100
+
+
+def test_latency_uses_the_interim_update_first():
+    run = {"t0": 5000.0, "clip_start": 100.0, "duration": 600.0}
+    gold = [{"refs": ["jo 3:16"], "end": 110.0, "approx": False}]
+    common = {"conn": "c", "seq": 3, "clock_offset": 0.0, "shown": "jo 3:16"}
+    records = [
+        {
+            "event": "segment",
+            **common,
+            "interim": True,
+            "t_client": 5010.5,
+            "t_recv": 5010.5,
+            "t_sent": 5010.51,
+        },
+        {
+            "event": "rendered",
+            "conn": "c",
+            "seq": 3,
+            "interim": True,
+            "t_render": 5010.53,
+            "clock_offset": 0.0,
+        },
+        {"event": "segment", **common, "t_client": 5030.0, "t_recv": 5030.0, "t_sent": 5030.01},
+        {"event": "rendered", "conn": "c", "seq": 3, "t_render": 5030.03, "clock_offset": 0.0},
+    ]
+    out = latency.measure(gold, run, records)
+    assert out["from_interim"] == 1 and out["hops"]["total"]["max_ms"] == 530
+
+
+def test_screen_accuracy_counts_changes_and_reverts():
+    run = {"t0": 5000.0, "clip_start": 100.0, "duration": 600.0}
+    gold = [{"refs": ["jo 3:16"], "end": 110.0, "approx": False}]
+    sent = [
+        {"t_sent": 5011.0, "shown": "jo 3:16", "reason": "interim"},
+        {"t_sent": 5012.0, "shown": "jo 3:16", "reason": "confirm"},
+        {"t_sent": 5100.0, "shown": "rm 8:28", "reason": "interim"},
+        {"t_sent": 5103.0, "shown": "jo 3:16", "reason": "revert"},
+    ]
+    sc = latency.screen_accuracy(gold, run, sent)
+    assert (sc["changes"], sc["correct"], sc["reverts"]) == (3, 1, 1)
