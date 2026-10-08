@@ -91,12 +91,27 @@ def test_score_slack_and_range(corpus):
     assert part["labels"] == 1 and part["tp"] == 1 and part["fp"] == 0
 
 
+def test_gold_mentions_use_word_times():
+    labels = [
+        {"t_start": 100.0, "t_end": 125.0, "correct_refs": ["jo 3:16"]},
+        {"t_start": 200.0, "t_end": 220.0, "correct_refs": ["rm 8:28"]},
+        {"t_start": 300.0, "t_end": 310.0, "correct_refs": []},
+    ]
+    preds = [(108.0, 110.0, "jo 3:16"), (150.0, 151.0, "rm 8:28")]
+    gold = latency.gold_mentions(labels, preds)
+    assert gold == [
+        {"refs": ["jo 3:16"], "end": 110.0, "approx": False},
+        {"refs": ["rm 8:28"], "end": 220.0, "approx": True},
+    ]
+
+
 def test_latency_joins_gold_with_the_log():
     run = {"t0": 5000.0, "clip_start": 100.0, "duration": 600.0}
-    labels = [
-        {"t_end": 110.0, "correct_refs": ["jo 3:16"]},  # said at wall 5010
-        {"t_end": 300.0, "correct_refs": ["rm 8:28"]},  # never shown
-        {"t_end": 50.0, "correct_refs": ["gn 1:1"]},  # before the clip
+    gold = [
+        {"refs": ["jo 3:16"], "end": 110.0, "approx": False},  # said at wall 5010
+        {"refs": ["jo 3:16"], "end": 200.0, "approx": False},  # already on screen
+        {"refs": ["rm 8:28"], "end": 300.0, "approx": False},  # never shown
+        {"refs": ["gn 1:1"], "end": 50.0, "approx": False},  # before the clip
     ]
     records = [
         {
@@ -119,8 +134,8 @@ def test_latency_joins_gold_with_the_log():
             "shown": "jo 3:16",
         },
     ]
-    out = latency.measure(labels, run, records)
-    assert (out["gold"], out["matched"], out["missed"]) == (2, 1, 1)
+    out = latency.measure(gold, run, records)
+    assert (out["gold"], out["already_shown"], out["matched"], out["missed"]) == (3, 1, 1, 1)
     h = out["hops"]
     assert h["stt"]["p50_ms"] == 1000 and h["server"]["p50_ms"] == 10
     assert h["render"]["p50_ms"] == 40 and h["total"]["max_ms"] == 1100

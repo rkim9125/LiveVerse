@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Latency from the end of a spoken reference to the screen, for one replay.
 
-For each gold reference in the played clip, the speech end is the label's end
-time (from Whisper word timestamps), put on the wall clock with the run file:
+For each gold reference in the played clip, the speech end is the end of the
+mention in the Whisper transcript (word timestamps), put on the wall clock with
+the run file:
 
-    speech_end = t0 + (t_end - clip_start)
+    speech_end = t0 + (mention_end - clip_start)
 
 The first segment in the latency log after that moment which changed the screen
 to that reference gives the server times, and its rendered event gives the
@@ -15,6 +16,7 @@ screen time. Each hop is reported as p50 / p95 / max in milliseconds:
     render     state sent to drawn on screen
     total      speech end to drawn on screen
 
+References already on screen when said need no update and are counted apart.
 References that never reached the screen within the wait are counted as missed.
 
 Usage (from realtime/backend):
@@ -27,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 WAIT_S = 30.0  # a reference shown later than this after it was said is not matched
@@ -52,13 +55,31 @@ def _stats(values: list[float]) -> dict | None:
     }
 
 
-def measure(labels: list[dict], run: dict, records: list[dict], wait: float = WAIT_S) -> dict:
+def gold_mentions(labels: list[dict], whisper_preds: list[tuple[float, float, str]]) -> list[dict]:
+    """When each gold reference was said, in recording seconds.
+
+    A label window is a whole Whisper segment (up to 30 s). The end of the
+    mention itself comes from detect() on the Whisper transcript with word
+    timestamps; labels where detect() did not find the reference fall back to
+    the window end and are marked approximate."""
+    out = []
+    for c in labels:
+        refs = c.get("correct_refs") or []
+        if not refs:
+            continue
+        ends = [
+            end
+            for start, end, ref in whisper_preds
+            if ref in refs and c["t_start"] - 1 <= start and end <= c["t_end"] + 1
+        ]
+        out.append({"refs": refs, "end": min(ends) if ends else c["t_end"], "approx": not ends})
+    return sorted(out, key=lambda g: g["end"])
+
+
+def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT_S) -> dict:
     t0, clip = run["t0"], run["clip_start"]
     clip_end = clip + run.get("duration", float("inf"))
-    gold = sorted(
-        (c for c in labels if c.get("correct_refs") and clip <= c["t_end"] <= clip_end),
-        key=lambda c: c["t_end"],
-    )
+    gold = [g for g in gold if clip <= g["end"] <= clip_end]
     sent = sorted(
         (r for r in records if r.get("event") == "segment" and r.get("t_sent") and r.get("shown")),
         key=lambda r: r["t_sent"],
@@ -69,15 +90,19 @@ def measure(labels: list[dict], run: dict, records: list[dict], wait: float = WA
         if r.get("event") == "rendered" and r.get("t_render") is not None
     }
     hops: dict[str, list[float]] = {"stt": [], "server": [], "render": [], "total": []}
-    missed = 0
+    missed = already = approx = 0
     used: set[tuple[str, int]] = set()
-    for c in gold:
-        speech_end = t0 + (c["t_end"] - clip)
+    for g in gold:
+        speech_end = t0 + (g["end"] - clip)
+        before = [r for r in sent if r["t_sent"] <= speech_end and r["t_sent"] >= t0]
+        if before and before[-1]["shown"] in g["refs"]:
+            already += 1  # the screen already showed it: nothing to wait for
+            continue
         seg = next(
             (
                 r
                 for r in sent
-                if r["shown"] in c["correct_refs"]
+                if r["shown"] in g["refs"]
                 and (r["conn"], r["seq"]) not in used
                 and speech_end - 1.0 <= r["t_recv"] <= speech_end + wait
             ),
@@ -86,6 +111,7 @@ def measure(labels: list[dict], run: dict, records: list[dict], wait: float = WA
         if seg is None:
             missed += 1
             continue
+        approx += g["approx"]
         used.add((seg["conn"], seg["seq"]))
         hops["server"].append(seg["t_sent"] - seg["t_recv"])
         if seg.get("t_client") is not None and seg.get("clock_offset") is not None:
@@ -97,8 +123,10 @@ def measure(labels: list[dict], run: dict, records: list[dict], wait: float = WA
             hops["total"].append(t_screen - speech_end)
     return {
         "gold": len(gold),
-        "matched": len(gold) - missed,
+        "already_shown": already,
+        "matched": len(gold) - missed - already,
         "missed": missed,
+        "approx_times": approx,
         "hops": {k: _stats(v) for k, v in hops.items()},
     }
 
@@ -110,21 +138,24 @@ def main() -> None:
     p.add_argument("run", type=Path)
     p.add_argument("logs", type=Path, nargs="+", help="latency-YYYYMMDD.jsonl files")
     p.add_argument("--wait", type=float, default=WAIT_S)
+    p.add_argument("--whisper", default="whisper.json", help="transcript with word times")
     args = p.parse_args()
     run = json.loads(args.run.expanduser().read_text(encoding="utf-8"))
     d = corpus_dir() / run["sermon"]
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
     labels = [c for c in labels if c.get("decision") in ("accept", "fix")]
+    gold = gold_mentions(labels, whisper_predictions(d / args.whisper))
     records = [
         json.loads(line)
         for path in args.logs
         for line in path.expanduser().read_text(encoding="utf-8").splitlines()
         if line
     ]
-    result = measure(labels, run, records, args.wait)
+    result = measure(gold, run, records, args.wait)
     print(
         f"{run['sermon']} from {run['clip_start']:.0f} s: {result['matched']} of "
-        f"{result['gold']} gold references reached the screen ({result['missed']} missed)"
+        f"{result['gold']} gold references reached the screen ({result['already_shown']} "
+        f"already shown, {result['missed']} missed, {result['approx_times']} approximate times)"
     )
     for name, s in result["hops"].items():
         if s:
@@ -137,6 +168,13 @@ def main() -> None:
     out = run_path_out(args.run.expanduser())
     out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"wrote {out}")
+
+
+def whisper_predictions(path: Path) -> list[tuple[float, float, str]]:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from score import predictions
+
+    return predictions(path)
 
 
 def run_path_out(run_path: Path) -> Path:
