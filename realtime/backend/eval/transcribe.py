@@ -29,30 +29,10 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.detect.books import BOOKS  # noqa: E402
+from stt_worker.prompt import PROMPT_MAX_TOKENS, book_prompt  # noqa: E402
 
 DEFAULT_MODEL = "mlx-community/whisper-large-v3-turbo"
 AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".mp4", ".webm"}
-
-# Whisper keeps at most n_text_ctx // 2 - 1 = 223 prompt tokens and drops the front
-# of anything longer. All 66 names take 267 tokens, so these rarely preached short
-# books are left out to make the rest fit (217 tokens).
-PROMPT_MAX_TOKENS = 223
-PROMPT_LEFT_OUT = [
-    "오바댜",
-    "나훔",
-    "하박국",
-    "스바냐",
-    "학개",
-    "요엘",
-    "빌레몬서",
-    "유다서",
-    "요한이서",
-    "요한삼서",
-    "아가",
-    "스가랴",
-    "예레미야애가",
-]
 
 
 def corpus_dir() -> Path:
@@ -88,10 +68,6 @@ def wav_seconds(path: Path) -> float:
         text=True,
     )
     return float(out.stdout.strip())
-
-
-def book_prompt() -> str:
-    return " ".join(b.ko for b in BOOKS if b.ko not in PROMPT_LEFT_OUT)
 
 
 def prompt_tokens(prompt: str) -> int:
