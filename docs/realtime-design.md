@@ -121,7 +121,10 @@ sequenceDiagram
 
 - The adapter turns audio into text segments: `{text, is_final, lang, t_client}`.
 - **Stage 3: browser Web Speech API.** Chrome on the interpreter laptop, `lang="ko-KR"`, interim results on, automatic restart. Segments go to the backend over the WebSocket.
-- **Later: server-side Whisper.** The browser streams audio and the backend runs Whisper. Output enters the pipeline at the normalizer, so nothing after it changes.
+- **Whisper streaming worker (experiment).** A separate process on the same Mac (`realtime/backend/stt_worker`) reads the audio input, cuts it into utterances with Silero VAD, decodes each with mlx-whisper and the book name prompt, and sends interim and final segments to `/ws` like the browser does. Nothing in the server or the screen changes.
+  - Why a host process and not the backend: the backend runs in Docker, and a container on macOS cannot use the Metal GPU that mlx needs. Reading the input device on the host also avoids streaming audio from the browser.
+  - Interims: the utterance so far is decoded every 1 s. Finals: when 0.4 s of silence ends the utterance, or at 12 s (cut at the quietest frame).
+  - One mlx-whisper call (large-v3-turbo) took 0.65 to 0.8 s for 1 to 12 s of audio on an M3 Pro, so decoding keeps up with 1 s interims.
 - Evaluation on recorded sermons showed that a prompt with Bible book names, applied to every 30 s window, removes most misheard book names (see `realtime/backend/eval`). Web Speech has no such prompt, which is why near-match book names (3.3) matter.
 
 ```python

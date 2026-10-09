@@ -16,6 +16,7 @@ screen time. Each hop is reported as p50 / p95 / max in milliseconds:
                missing when the hold timer showed it)
     server     server receive to state sent
     render     state sent to drawn on screen
+    to_sent    speech end to state sent (for runs with no screen connected)
     total      speech end to drawn on screen
 
 References already on screen when said need no update and are counted apart.
@@ -109,7 +110,13 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
         (r for r in records if r.get("event") == "rendered" and r.get("t_render") is not None),
         key=lambda r: r["t"],
     )
-    hops: dict[str, list[float]] = {"stt": [], "server": [], "render": [], "total": []}
+    hops: dict[str, list[float]] = {
+        "stt": [],
+        "server": [],
+        "render": [],
+        "to_sent": [],
+        "total": [],
+    }
     missed = already = approx = from_interim = 0
     used: set[tuple[str, int]] = set()
     for g in gold:
@@ -135,6 +142,7 @@ def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT
         from_interim += bool(seg.get("interim"))
         used.add(key(seg))
         hops["server"].append(seg["t_sent"] - seg["t_recv"])
+        hops["to_sent"].append(seg["t_sent"] - speech_end)
         if seg.get("t_client") is not None and seg.get("clock_offset") is not None:
             hops["stt"].append(seg["t_client"] + seg["clock_offset"] - speech_end)
         r = render_of(seg, renders)

@@ -187,6 +187,42 @@ After the 10 minute results look sound, a whole sermon can run overnight. Leave 
 
 In the morning, check the **Restarts** and **Gaps** counters on the page before saving the capture. A large gap means part of the sermon was not heard.
 
+## Whisper streaming worker (experiment)
+
+The worker in `realtime/backend/stt_worker` is a second speech source that runs on the Mac itself. It uses Silero VAD and mlx-whisper (Apple Silicon only) and sends segments to the server like the browser does. Nothing leaves the computer.
+
+Install its dependencies once:
+
+```sh
+cd realtime/backend
+uv sync --group dev --group eval --group stt
+```
+
+**Offline, finals only, no server** (dev sermons only). Writes `whisperstream.<name>.json` next to the Whisper transcripts:
+
+```sh
+uv run python -m stt_worker --sermon sermon-01 --start 180 --duration 600 --no-interim --words --name s01
+uv run python eval/score.py sermon-01 --transcript whisperstream.s01.json --name ws-s01 \
+  --from 180 --to 780 --quotes
+```
+
+**At live pace into a server**, with interims. It also writes a run file for `eval/stt_latency.py`:
+
+```sh
+uv run python -m stt_worker --sermon sermon-01 --start 180 --duration 600 --realtime \
+  --ws ws://127.0.0.1:8000/ws --name rt-s01
+```
+
+**From an input device** (a microphone, or BlackHole while `play_to_device.py` plays a recording):
+
+```sh
+uv run python -m stt_worker --device "BlackHole 2ch" --ws ws://127.0.0.1:8001/ws
+```
+
+Stop it with Ctrl+C. It writes a capture in the browser's format to the corpus `captures` folder, for `eval/capture_to_segments.py`.
+
+To time single decoding calls on this computer: `uv run python eval/stt_bench.py sermon-01`.
+
 ## Frontend unit tests
 
 The frontend modules (`realtime/frontend/shared`) have Node tests with fake recognition and socket objects:
