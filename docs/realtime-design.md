@@ -160,6 +160,9 @@ class SpeechSource(Protocol):
 
 - **Spoken position:** the last reference the preacher said, including chapters said in passing. Relative mentions ("2절", "다음 절") are resolved against it.
 - **Book only:** after a book said with an out of range chapter, the spoken position is that book with no chapter. A later "3장" resolves to that book's chapter 3. Verse level mentions ("2절", "다음 절") have no chapter to attach to and produce nothing until a chapter is said.
+- **Across segments:** preachers pause while finding a passage, and each pause ends a segment. Two pieces are carried for 15 s (`app/detect/carry.py`):
+  - a segment ending on a bare book name ("오늘 본문은 룻기") lends the book to a chapter at the start of the next segment ("2장 1절")
+  - "N절부터" at the end of one segment and "M절까지" of the same chapter at the start of the next make one range N-M
 - **Shown passage:** what is on the interpreter's screen now. It is used to hide a chapter said again while one of its verses is shown, and to allow looser near-match names.
 - Evaluation showed that resolving relative mentions only against the shown passage loses the preacher's position. For example, "이제 2장에 보면" moves the preacher back to chapter 2 even though it is not worth showing.
 
