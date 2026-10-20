@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -20,6 +21,17 @@ class Decoded:
     text: str
     words: list[tuple[float, float, str]] = field(default_factory=list)  # utterance seconds
     seconds: float = 0.0  # time the decoding took
+
+
+def drop_repetition(text: str, min_count: int = 4, share: float = 0.5) -> str:
+    """ "" for a hallucinated loop: one word making up at least share of the text
+    and repeated min_count times or more ("요한일서 요한일서 요한일서 ..."). Whisper
+    does this on short or unclear audio, often echoing the book name prompt."""
+    words = text.split()
+    if len(words) < min_count:
+        return text
+    _, n = Counter(words).most_common(1)[0]
+    return "" if n >= min_count and n / len(words) >= share else text
 
 
 class Decoder(Protocol):
@@ -55,5 +67,5 @@ class MlxDecoder:
         for seg in result.get("segments", []):
             for w in seg.get("words", []) if words else []:
                 out.append((float(w["start"]), float(w["end"]), w["word"]))
-        text = "".join(s["text"] for s in result.get("segments", [])).strip()
-        return Decoded(text, out, time.perf_counter() - t)
+        text = drop_repetition("".join(s["text"] for s in result.get("segments", [])).strip())
+        return Decoded(text, out if text else [], time.perf_counter() - t)

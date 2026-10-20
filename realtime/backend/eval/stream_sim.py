@@ -191,7 +191,7 @@ def replay(events: list[dict], session: Session) -> list[dict]:
 
 def measure(history: list[dict], gold: list[dict], clip: float, duration: float) -> dict:
     gold = [g for g in gold if clip <= g["end"] <= clip + duration]
-    lat, already, missed = [], 0, 0
+    lat, already, missed, detail = [], 0, 0, []
     for g in gold:
         end = g["end"] - clip
         before = [h for h in history if h["t"] < end - 1.0]
@@ -204,8 +204,17 @@ def measure(history: list[dict], gold: list[dict], clip: float, duration: float)
         )
         if hit is None:
             missed += 1
+            detail.append({"refs": g["refs"], "said": round(g["end"], 1), "latency": None})
         else:
             lat.append(max(0.0, hit["t"] - end))
+            detail.append(
+                {
+                    "refs": g["refs"],
+                    "said": round(g["end"], 1),
+                    "latency": round(lat[-1], 2),
+                    "how": hit["reason"],
+                }
+            )
     changes = correct = reverts = 0
     last = None
     for h in history:
@@ -237,6 +246,7 @@ def measure(history: list[dict], gold: list[dict], clip: float, duration: float)
         "changes": changes,
         "correct": correct,
         "reverts": reverts,
+        "detail": detail,
     }
 
 

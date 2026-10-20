@@ -134,3 +134,19 @@ def test_stt_activity_reports_the_last_segments(client):
     body = client.get("/api/stt").json()
     assert body["last_final"] is not None and body["last_interim"] is not None
     assert body["last_final"] <= body["now"]
+
+
+def test_whisper_interim_shows_after_one_result(client):
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json(
+            {
+                "type": "transcript",
+                "seq": 1,
+                "text": "로마서 8장 28절",
+                "is_final": False,
+                "source": "whisper",
+            }
+        )
+        state = ws.receive_json()
+        assert state["type"] == "state" and state["shown"]["interim"] is True

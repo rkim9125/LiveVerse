@@ -44,6 +44,7 @@ class WsSink:
             "text": r.decoded.text,
             "is_final": r.is_final,
             "lang": self.lang,
+            "source": "whisper",
             "t_client": time.time(),
         }
         await self.ws.send(json.dumps(msg, ensure_ascii=False))

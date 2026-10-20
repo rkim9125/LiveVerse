@@ -105,6 +105,7 @@ class Session:
         self._watch: Candidate | None = None  # verse being watched in interim results
         self._watch_count = 0
         self._watch_since = 0.0
+        self._watch_repeats = self.settings.interim_repeats
         self._before_interim: Shown | None = None  # screen before an interim display
         self.shown: Shown | None = None
         self.known_books: set[str] = set()
@@ -181,9 +182,13 @@ class Session:
     def _end_watch(self) -> None:
         self._watch, self._watch_count = None, 0
 
-    def process_interim(self, text: str, now: float, seq: int | None = None) -> bool:
+    def process_interim(
+        self, text: str, now: float, seq: int | None = None, repeats: int | None = None
+    ) -> bool:
         """Watch an interim segment for a stable verse. Returns True if the
-        screen changed. Spoken, candidates and alternatives are not touched."""
+        screen changed. Spoken, candidates and alternatives are not touched.
+        repeats overrides settings.interim_repeats (per speech source)."""
+        self._watch_repeats = repeats or self.settings.interim_repeats
         if not self.settings.interim_show:
             return False
         saved = self._next_id, self._last_book
@@ -224,7 +229,7 @@ class Session:
         if w is None or self._watched_is_shown():
             return False
         stable = (
-            self._watch_count >= self.settings.interim_repeats
+            self._watch_count >= self._watch_repeats
             or now - self._watch_since
             >= self.settings.interim_hold_s - 1e-3  # float error at epoch times
         )

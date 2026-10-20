@@ -1,7 +1,7 @@
 """WebSocket protocol for the interpreter screen (design 3.14).
 
 Client to server
-    transcript  {seq, text, is_final, lang?, t_client?, t_audio?}  STT segment.
+    transcript  {seq, text, is_final, lang?, t_client?, t_audio?, source?}  STT segment.
                 t_audio (seconds into a recording) replaces the server clock for
                 the session's timing, so a recording can be replayed faster
                 than real time.
@@ -94,6 +94,7 @@ async def interpreter_socket(ws: WebSocket) -> None:
                     t_client=t_client if isinstance(t_client, (int, float)) else None,
                     t_audio=float(t_audio) if isinstance(t_audio, (int, float)) else None,
                     lang=str(msg.get("lang", "ko-KR")),
+                    source="whisper" if msg.get("source") == "whisper" else "webspeech",
                     conn=conn,
                     clock_offset=offset,
                     t_recv=t_recv,

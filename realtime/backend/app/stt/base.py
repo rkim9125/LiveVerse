@@ -30,6 +30,7 @@ class Segment:
     conn: str = "server"
     clock_offset: float | None = None
     t_recv: float = field(default_factory=time.time)
+    source: str = "webspeech"  # webspeech (browser) or whisper (stt_worker)
 
 
 class SpeechSource(Protocol):
@@ -100,7 +101,10 @@ class SegmentSink:
         now = seg.t_audio if seg.t_audio is not None else seg.t_recv
         self.session.stt_activity["final" if seg.is_final else "interim"] = seg.t_recv
         if not seg.is_final:
-            if self.session.process_interim(seg.text, now, seq=seg.seq):
+            repeats = (
+                self.session.settings.interim_repeats_whisper if seg.source == "whisper" else None
+            )
+            if self.session.process_interim(seg.text, now, seq=seg.seq, repeats=repeats):
                 self._cancel_timer()
                 await self._send(seg, True, time.time())
             else:

@@ -315,3 +315,8 @@ def test_split_references(session, case):
         session.process_final(text, now=float(t))
         seen.append(shown(session))
     assert seen == case["shown"], case["note"]
+
+
+def test_interim_repeats_can_be_given_per_source(session):
+    assert session.process_interim("요한복음 3장 16절", now=0.0, repeats=1)
+    assert shown(session) == "jo 3:16" and session.shown.interim

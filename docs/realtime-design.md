@@ -244,6 +244,7 @@ class RefResolver(Protocol):
 - **Interim display:** a verse level reference in interim results is shown before the final arrives once it is stable.
   - Stable means the same reference is the last showable verse in 2 consecutive interim results, or stays there for 0.7 s. Both values are settings (`LIVEVERSE_INTERIM_REPEATS`, `LIVEVERSE_INTERIM_HOLD_S`), and `LIVEVERSE_INTERIM_SHOW=off` turns this off.
   - Only verse level references with confidence at or above the threshold count. Chapters, guesses and quotes wait for the final.
+  - Per speech source: segments from the Whisper worker (`"source": "whisper"`) need only 1 interim result (`LIVEVERSE_INTERIM_REPEATS_WHISPER`). Each Whisper interim is decoded from the whole utterance so far and changes less than Web Speech's; in an offline simulation on the dev set this halved the median latency (1.46 to 0.76 s and 1.88 to 1.19 s) with no more reverts or wrong screens.
   - A passage shown this way is marked interim on screen.
   - When the final arrives: if it contains the same reference, the mark is removed. If it picks another passage, that passage replaces it. If it contains neither, the screen goes back to what it showed before.
   - Interim results never move the spoken position; only finals do.
