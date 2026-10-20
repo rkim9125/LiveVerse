@@ -132,3 +132,13 @@ def test_interims_come_every_second_and_share_the_seq():
 def test_unfinished_utterance_is_flushed_at_the_end():
     results, _, _ = run_worker([0.9] * 50, WorkerConfig(interim=False))
     assert [r.is_final for r in results] == [True]
+
+
+def test_long_utterance_ends_at_a_short_pause():
+    cfg = SegmenterConfig(short_after_s=1.0, short_hangover_s=0.2)
+    seg = Segmenter(cfg)
+    probs = [0.9] * 40 + [0.1] * 8 + [0.9] * 10  # 1.3 s speech, 0.26 s pause
+    out = feed(seg, probs)
+    assert len(out) == 1 and not out[0].cut
+    short = Segmenter()  # without it, the pause is too short to end anything
+    assert feed(short, probs) == []

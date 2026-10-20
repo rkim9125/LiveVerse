@@ -10,6 +10,7 @@ Korean, word trigrams for English). Thresholds were tuned on the dev set.
 
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -18,12 +19,33 @@ from app.core.bible_text import BibleText
 from app.core.models import Mention, Reference
 
 MIN_GRAMS = 6  # verses with fewer trigrams are too short to identify by their words
-MIN_HITS = 10  # shared trigrams needed to accept a match
+MIN_HITS = 10  # shared trigrams needed to accept a match in a long verse
+# A short verse cannot share MIN_HITS trigrams. It needs SHORT_COVERAGE of its
+# trigrams instead, and at least MIN_HITS_SHORT ("The LORD is my shepherd; I
+# shall not want" has 7 and needs 6).
+MIN_HITS_SHORT = 5
+SHORT_COVERAGE = 0.85
 MIN_COVERAGE = 0.4  # share of the verse's trigrams found in the segment
 MIN_MARGIN = 0.1  # best coverage minus second best
 CONF_QUOTE = 0.7
 
 VerseKey = tuple[str, int, int]
+
+
+_PAREN_RE = re.compile(r"\([^)]*\)")
+# English psalm titles at the start of verse 1 ("A Psalm of David.", "To the chief
+# Musician, A Psalm of David."). Korean titles are in parentheses.
+_TITLE_RE = re.compile(
+    r"^(?:[^.]*\b(?:Psalm|Song|Prayer|Maschil|Michtam|Shiggaion|Musician)\b[^.]*\.\s*)+"
+)
+
+
+def quoted_text(book: str, verse: int, text: str) -> str:
+    """The part of a verse a preacher would quote: without psalm titles."""
+    text = _PAREN_RE.sub(" ", text)
+    if book == "ps" and verse == 1:
+        text = _TITLE_RE.sub("", text)
+    return text
 
 
 def _ko_grams(text: str) -> set[str]:
@@ -60,22 +82,27 @@ class QuoteIndex:
         for book, chapters in bible.books.items():
             for c, (ko_verses, en_verses) in enumerate(chapters, 1):
                 for v, text in enumerate(ko_verses, 1):
-                    ko[(book, c, v)] = text
+                    ko[(book, c, v)] = quoted_text(book, v, text)
                 for v, text in enumerate(en_verses, 1):
-                    en[(book, c, v)] = text
+                    en[(book, c, v)] = quoted_text(book, v, text)
         self.korean = _build(ko, _ko_grams) if ko else None
         self.english = _build(en, _en_grams) if en else None
 
     def _best(
         self, index: _Index | None, grams: set[str], min_hits: int = MIN_HITS
     ) -> list[tuple[float, int, VerseKey]]:
-        if index is None or len(grams) < min_hits:
+        floor = min(min_hits, MIN_HITS_SHORT)
+        if index is None or len(grams) < floor:
             return []
         hits: dict[VerseKey, int] = defaultdict(int)
         for g in grams:
             for key in index.postings.get(g, ()):
                 hits[key] += 1
-        scored = [(n / index.grams[k], n, k) for k, n in hits.items() if n >= min_hits]
+        scored = [
+            (n / index.grams[k], n, k)
+            for k, n in hits.items()
+            if n >= required_hits(index.grams[k], min_hits)
+        ]
         return sorted(scored, reverse=True)[:2]
 
     def best_coverage(self, text: str, min_hits: int) -> float:
@@ -109,6 +136,12 @@ class QuoteIndex:
             return None
         ref = Reference(book, chapter, verse)
         return Mention(ref, "absolute", "", (0, 0), CONF_QUOTE)
+
+
+def required_hits(size: int, min_hits: int = MIN_HITS) -> int:
+    """Shared trigrams needed for a verse with size trigrams: min_hits, or
+    nearly all of a short verse."""
+    return min(min_hits, max(MIN_HITS_SHORT, math.ceil(SHORT_COVERAGE * size)))
 
 
 def _inside(passage: Reference, book: str, chapter: int, verse: int) -> bool:

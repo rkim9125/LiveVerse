@@ -42,6 +42,20 @@ def test_short_common_phrase_is_not_a_quote(kjv):
     assert kjv.find("and he said unto them, go") is None
 
 
+def test_short_verse_needs_nearly_all_its_words(kjv):
+    # Psalm 23:1 has 7 word trigrams, fewer than MIN_HITS.
+    assert str(kjv.find("the LORD is my shepherd; I shall not want").ref) == "ps 23:1"
+    assert kjv.find("the LORD is my shepherd, he is good") is None
+
+
+def test_required_hits_scale_with_verse_length():
+    from app.detect.quotes import MIN_HITS, required_hits
+
+    assert required_hits(7) == 6
+    assert required_hits(6) == 6
+    assert required_hits(30) == MIN_HITS
+
+
 def test_env_path(monkeypatch):
     monkeypatch.setenv("BIBLE_TEXT_PATH", str(bible_text.SAMPLE))
     assert bible_text.default_path() == bible_text.SAMPLE

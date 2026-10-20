@@ -10,6 +10,9 @@ probabilities.
   cut    an utterance reaching max_s is cut at the frame with the lowest
          probability in its last cut_search_s; the rest starts the next one.
          Sermons often run on without a pause long enough to end an utterance.
+  short  once an utterance is short_after_s long, short_hangover_s of silence
+         ends it (a breath between phrases), so long speech ends at a pause
+         instead of at max_s. Off when short_after_s is None.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import numpy as np
 SR = 16000
 
 
-@dataclass
+@dataclass(frozen=True)
 class SegmenterConfig:
     frame: int = 512  # samples per VAD frame (32 ms at 16 kHz, Silero's size)
     start_threshold: float = 0.5
@@ -31,6 +34,8 @@ class SegmenterConfig:
     pad_s: float = 0.2
     max_s: float = 12.0
     cut_search_s: float = 1.5
+    short_after_s: float | None = None
+    short_hangover_s: float = 0.2
 
 
 @dataclass
@@ -51,6 +56,10 @@ class Segmenter:
         self._hang_frames = max(1, round(c.hangover_s * SR / c.frame))
         self._max_frames = round(c.max_s * SR / c.frame)
         self._search_frames = round(c.cut_search_s * SR / c.frame)
+        self._short_hang = max(1, round(c.short_hangover_s * SR / c.frame))
+        self._short_after = (
+            None if c.short_after_s is None else round(c.short_after_s * SR / c.frame)
+        )
         self.reset()
 
     def reset(self) -> None:
@@ -88,7 +97,10 @@ class Segmenter:
                 self._active, self._run = True, 0
             return []
         self._run = self._run + 1 if prob < c.end_threshold else 0
-        if self._run >= self._hang_frames:
+        hang = self._hang_frames
+        if self._short_after is not None and len(self._frames) >= self._short_after:
+            hang = min(hang, self._short_hang)
+        if self._run >= hang:
             done = self._make(len(self._frames) - self._run + 1)  # keep 1 silent frame
             self._restart(len(self._frames))
             return [done]
