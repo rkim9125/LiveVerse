@@ -1,0 +1,75 @@
+# Checks for the realtime sermon assistant (realtime/).
+# Runs without the local corpus or the local Bible text: tests use the
+# public-domain KJV sample, and tests that need recordings skip themselves.
+name: realtime
+
+on:
+  push:
+    branches: [feature/realtime]
+  pull_request:
+    paths:
+      - "realtime/**"
+      - "scripts/**"
+      - "data/sample/**"
+      - ".github/workflows/realtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  copyright:
+    name: No copyrighted Bible text
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan every tracked file
+        run: git ls-files -z | xargs -0 scripts/check_no_copyrighted.sh
+
+  backend:
+    name: Backend tests and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: realtime/backend
+    env:
+      LIVEVERSE_CORPUS: /nonexistent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --group dev
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen pytest -q
+
+  frontend:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --test tests/
+        working-directory: realtime/frontend
+
+  docker:
+    name: Docker image build and check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t liveverse-backend:dev --build-arg VERSION="$(git rev-parse --short HEAD)" realtime/backend
+      - name: No Bible text in the image
+        run: realtime/backend/scripts/check_image.sh liveverse-backend:dev
+      - name: Starts and serves the KJV sample
+        run: |
+          docker run -d --name lv -p 127.0.0.1:8000:8000 -e LIVEVERSE_ALLOW_REMOTE=on \
+            -v "$PWD/data:/srv/data:ro" liveverse-backend:dev
+          for i in $(seq 1 30); do
+            curl -fsS 127.0.0.1:8000/api/health && break
+            sleep 1
+          done
+          curl -fsS "127.0.0.1:8000/api/verses?ref=John+3:16" | grep -q "God so loved"
+          docker rm -f lv
