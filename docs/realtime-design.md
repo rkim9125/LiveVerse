@@ -274,12 +274,16 @@ class RefResolver(Protocol):
 
 ### 3.13 Interpreter screen
 
-- Large NKJV text of the shown passage. 개역한글 can be shown beside it, smaller, if the interpreter wants it.
-- The verse being read is highlighted (#13).
-- A badge shows the source (rule, reading, quote, LLM) and the confidence. Tentative passages are styled differently.
-- Alternatives are listed at the side.
-- A small transcript ticker shows the matched words.
-- Large type, dark and light themes, and nothing that needs a mouse during a sermon.
+As built in stage 4 (`realtime/frontend/screen`, served at `/ui/screen/` and `/`):
+
+- The shown passage is large, with 개역한글 and NKJV side by side, one row per verse. The interpreter reads both, so they get the same size; the column of a translation that is missing is folded away. On a narrow screen the English goes under the Korean.
+- The verse being read is highlighted (#13; the reading tracker comes in stage 5).
+- Marks show the source (said, context, quote, guess, manual) and the confidence. A passage shown from interim results is italic, underlined with dashes and marked interim until its final arrives. Tentative (LLM) passages have a dashed mark.
+- Up to three alternatives are listed at the side, on keys 1 to 3. Guesses and chapters said in passing are faint.
+- The spoken position is shown at the side, including a book whose chapter is unknown.
+- A speech status in the header: server connection, and whether segments are arriving from any speech source (`GET /api/stt`). The Listen button (key L) makes the page itself a Web Speech source.
+- Keyboard: 1 to 3, Esc clears, / searches, + and - change the text size, T switches light and dark, ? lists the keys. Text size and theme are kept per browser.
+- Not built yet: the transcript ticker of matched words. It is left out until the reading tracker shows what is useful to see.
 
 ### 3.14 Protocol
 
@@ -309,6 +313,7 @@ REST
 | GET | `/api/verses?ref=John+3:16-18` | verse lookup; accepts the same typed forms as the search box |
 | POST | `/api/detect` | debug: detection on one text with an optional spoken context; the session is not touched |
 | GET | `/api/session` | current state, same shape as the `state` message |
+| GET | `/api/stt` | when the last interim and final segments arrived from any speech source, with the server time, for the screen's speech status |
 | POST | `/api/session/reset` | start over, for example before a service |
 | GET | `/api/metrics/latency` | today's latency per hop (p50, p95, max) |
 

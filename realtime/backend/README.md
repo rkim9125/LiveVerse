@@ -8,7 +8,9 @@ Done so far:
 - **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen, packaged with Docker.
 - **Stage 3:** speech input. Chrome's Web Speech API transcribes Korean in the browser, and a minimal STT check page at `/ui/stt-check/` sends the segments to the server. Testing it, BlackHole setup and the evaluation procedure are in [docs/stt-testing.md](../../docs/stt-testing.md).
 
-The interpreter screen, reading confirmation and the LLM come in later stages.
+- **Stage 4:** the interpreter screen at `/ui/screen/` (also `/`). It shows the passage large with Korean and English side by side, the alternatives on keys 1 to 3, the source and confidence of what is shown, and interim displays marked as such. It has keyboard shortcuts (`?` lists them), light and dark themes, text size, and a speech status. Speech comes from the Listen button (Web Speech in Chrome) or from another source such as the Whisper worker.
+
+Reading confirmation and the LLM come in later stages.
 
 ## Setup and tests
 
@@ -36,7 +38,13 @@ curl "127.0.0.1:8000/api/verses?ref=John+3:16"
 - **Settings:** set them with environment variables. They are listed in [app/config.py](app/config.py) and include the display threshold, quote search, the pending window and the log folder.
 - **Protocol:** the WebSocket protocol (`/ws`) and the REST endpoints are described in the design document, section 3.14.
 
-The frontend in `realtime/frontend` is served at `http://127.0.0.1:8000/ui/`. The STT check page is `http://127.0.0.1:8000/ui/stt-check/`. It is not in the Docker image yet; that comes in stage 4.
+The frontend in `realtime/frontend` is served at `http://127.0.0.1:8000/ui/`: the interpreter screen at `/ui/screen/` and the STT check page at `/ui/stt-check/`. Its tests:
+
+```sh
+cd realtime/frontend
+node --test tests/          # unit tests
+npm install && npm run e2e  # the screen in headless Chrome, with the KJV sample and synthetic speech
+```
 
 To replay a recorded transcript into a running server and print every screen change, with no transcript text:
 
@@ -54,7 +62,8 @@ curl 127.0.0.1:8000/api/health
 backend/scripts/check_image.sh liveverse-backend:dev   # the image holds no Bible text
 ```
 
-- **Data:** the image contains only the backend code. The repo's `data/` folder is mounted read only at `/srv/data`. The server uses `data/bible_data.js` if it is there, and the KJV sample otherwise.
+- **Build:** the build context is `realtime/` (`docker build -f backend/Dockerfile .`), so the image holds the backend code and the web pages, and nothing else (`realtime/.dockerignore`).
+- **Data:** the image contains no Bible text. The repo's `data/` folder is mounted read only at `/srv/data`. The server uses `data/bible_data.js` if it is there, and the KJV sample otherwise.
 - **Network:** the port is published on the host's `127.0.0.1` only. Inside the container, requests arrive from the Docker network, so compose turns off the app's own localhost check (`LIVEVERSE_ALLOW_REMOTE=on`). Without that setting the app refuses every request with 403.
 - **Logs:** latency logs go to the `liveverse-logs` volume.
 - **User:** the container runs as an unprivileged user, and a health check calls `/api/health`.

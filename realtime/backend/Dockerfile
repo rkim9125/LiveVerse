@@ -1,4 +1,5 @@
-# LiveVerse realtime backend.
+# LiveVerse realtime backend and its web pages (/ui/).
+# Build from realtime/: docker build -f backend/Dockerfile .
 # Bible text is never copied into the image: mount the repo's data/ folder at
 # /srv/data (read only). The app finds data/bible_data.js there, or falls back
 # to data/sample/kjv.js.
@@ -12,10 +13,11 @@ ENV UV_COMPILE_BYTECODE=1 \
     PATH="/srv/venv/bin:$PATH"
 
 WORKDIR /srv/realtime/backend
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-COPY app ./app
+COPY backend/app ./app
+COPY frontend /srv/realtime/frontend
 
 ARG VERSION=unknown
 ENV LIVEVERSE_VERSION=${VERSION} \

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveVerse Interpreter</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' rx='3' fill='%233d6b4f'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --text: #1f1d18; --muted: #6b665c; --line: #ddd7ca;
+    --accent: #2f6b4a; --accent-soft: #e3efe7; --interim: #a8650c; --interim-soft: #fbefdc;
+    --error: #b3261e; --ok: #2f6b4a; --warn: #a8650c; --reading: #fff3c4; --num: #9b8a6a;
+    --verse-size: 22px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --panel: #1d1c1a; --text: #ece8df; --muted: #a29d92; --line: #35332e;
+      --accent: #7fc29a; --accent-soft: #23362b; --interim: #e6a64e; --interim-soft: #3a2c17;
+      --error: #f2877f; --ok: #7fc29a; --warn: #e6a64e; --reading: #3d3518; --num: #8f8268;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141413; --panel: #1d1c1a; --text: #ece8df; --muted: #a29d92; --line: #35332e;
+    --accent: #7fc29a; --accent-soft: #23362b; --interim: #e6a64e; --interim-soft: #3a2c17;
+    --error: #f2877f; --ok: #7fc29a; --warn: #e6a64e; --reading: #3d3518; --num: #8f8268;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font: 15px/1.5 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  }
+  button, input { font: inherit; color: inherit; }
+  button {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px 10px; cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  kbd {
+    font: 600 .75em/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 5px;
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--muted);
+  }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 1rem; margin: 0 8px 0 0; letter-spacing: .02em; }
+  .status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .9rem; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+  .dot.error { background: var(--error); } .dot.idle { background: var(--muted); }
+  .spacer { flex: 1; }
+  .controls { display: flex; gap: 6px; align-items: center; }
+  #listen[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px;
+    padding: 16px; max-width: 1400px; margin: 0 auto;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  #passage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; min-height: 60vh;
+  }
+  #title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 4px; }
+  #title-ko { font-size: calc(var(--verse-size) * 1.45); font-weight: 700; }
+  #title-en { font-size: calc(var(--verse-size) * 1.1); color: var(--muted); font-weight: 600; }
+  #passage.interim #title-ko, #passage.interim #title-en {
+    font-style: italic; text-decoration: underline dashed var(--interim) 2px; text-underline-offset: 6px;
+  }
+  #marks { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+  .pill {
+    font-size: .8rem; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--line);
+    color: var(--muted); white-space: nowrap;
+  }
+  .pill.source { border-color: var(--accent); color: var(--accent); }
+  .pill.interim { background: var(--interim-soft); border-color: var(--interim); color: var(--interim); font-weight: 600; }
+  .pill.tentative { border-style: dashed; }
+  #verses { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 0 18px; }
+  .row { display: contents; }
+  .row > * { padding: 8px 0; border-top: 1px solid var(--line); font-size: var(--verse-size); line-height: 1.45; }
+  .row .num { color: var(--num); font-weight: 600; font-size: calc(var(--verse-size) * .75); padding-top: 12px; text-align: right; }
+  .row.reading > * { background: var(--reading); }
+  .row.head > * { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 0 6px; border-top: none; }
+  #verses.only-ko, #verses.only-en { grid-template-columns: auto minmax(0, 1fr); }
+  #verses.only-ko .en, #verses.only-en .ko { display: none; }
+  #verses.only-en .en { color: var(--text); }
+  .row .ko { word-break: keep-all; }
+  @media (max-width: 640px) {
+    #verses { grid-template-columns: auto minmax(0, 1fr); }
+    .row .en { grid-column: 2; border-top: none; padding-top: 0; color: var(--muted); }
+  }
+  #empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  #empty p { margin: 6px 0; }
+
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .panel h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  #alternatives { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  #alternatives button { width: 100%; text-align: left; display: flex; gap: 8px; align-items: baseline; }
+  #alternatives .meta { margin-left: auto; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+  #alternatives .faint { opacity: .6; }
+  #search-form { display: flex; gap: 6px; }
+  #search { flex: 1; min-width: 0; padding: 5px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  #spoken { color: var(--muted); font-size: .9rem; }
+  #message { color: var(--error); font-size: .9rem; min-height: 1.2em; margin: 0; }
+
+  #help {
+    position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.35);
+  }
+  #help.open { display: grid; }
+  #help .panel { max-width: 420px; width: calc(100% - 32px); }
+  #help dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+  #help dd { margin: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LiveVerse</h1>
+  <span class="status" title="Server connection"><span id="conn-dot" class="dot"></span><span id="conn">connecting</span></span>
+  <span class="status" title="Speech input"><span id="stt-dot" class="dot"></span><span id="stt">no speech input</span></span>
+  <span class="spacer"></span>
+  <div class="controls">
+    <button id="listen" aria-pressed="false" title="Listen with this browser (L)">Listen</button>
+    <button id="smaller" title="Smaller text (-)" aria-label="smaller text">A−</button>
+    <button id="larger" title="Larger text (+)" aria-label="larger text">A+</button>
+    <button id="theme" title="Light or dark (T)">Theme</button>
+    <button id="help-open" title="Shortcuts (?)" aria-label="keyboard shortcuts">?</button>
+  </div>
+</header>
+
+<main>
+  <section id="passage" aria-live="polite" aria-label="current passage">
+    <div id="empty">
+      <p>Waiting for a reference.</p>
+      <p><kbd>/</kbd> search &nbsp; <kbd>1</kbd> to <kbd>3</kbd> alternatives &nbsp; <kbd>Esc</kbd> clear</p>
+    </div>
+    <div id="shown" hidden>
+      <div id="title"><span id="title-ko"></span><span id="title-en"></span></div>
+      <div id="marks"></div>
+      <div id="verses" role="table" aria-label="verses"></div>
+    </div>
+  </section>
+
+  <aside>
+    <section class="panel" aria-label="alternatives">
+      <h2>Alternatives</h2>
+      <ol id="alternatives"></ol>
+      <p id="no-alternatives" style="color:var(--muted);margin:0">None</p>
+    </section>
+    <section class="panel" aria-label="search">
+      <h2>Search</h2>
+      <form id="search-form">
+        <input id="search" type="text" placeholder="요 3:16, John 3:16" aria-label="search a reference" autocomplete="off">
+        <button type="submit">Show</button>
+      </form>
+      <p id="message" role="status"></p>
+    </section>
+    <section class="panel" aria-label="spoken position">
+      <h2>Preacher is at</h2>
+      <div id="spoken">unknown</div>
+      <!-- Reading follow (#13): the verse being read is highlighted in the passage. -->
+      <div id="reading" style="color:var(--muted);font-size:.85rem;margin-top:6px"></div>
+    </section>
+  </aside>
+</main>
+
+<div id="help" role="dialog" aria-modal="true" aria-label="keyboard shortcuts">
+  <div class="panel">
+    <h2>Shortcuts</h2>
+    <dl>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>show an alternative</dd>
+      <dt><kbd>Esc</kbd></dt><dd>clear the screen</dd>
+      <dt><kbd>/</kbd></dt><dd>search a reference</dd>
+      <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>text size</dd>
+      <dt><kbd>T</kbd></dt><dd>light or dark</dd>
+      <dt><kbd>L</kbd></dt><dd>listen with this browser</dd>
+      <dt><kbd>?</kbd></dt><dd>this list</dd>
+    </dl>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

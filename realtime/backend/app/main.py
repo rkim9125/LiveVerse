@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import cache
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import rest, ws
@@ -52,6 +52,11 @@ def create_app(settings: Settings | None = None, store: BibleStore | None = None
         # Same origin as the API, so the page counts as a secure context on localhost
         # (needed for the microphone) and can open the WebSocket without CORS.
         app.mount("/ui", StaticFiles(directory=FRONTEND, html=True), name="ui")
+
+        @app.get("/", include_in_schema=False)
+        def home() -> RedirectResponse:
+            return RedirectResponse("/ui/screen/")
+
     return app
 
 

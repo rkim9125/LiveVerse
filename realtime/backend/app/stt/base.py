@@ -98,6 +98,7 @@ class SegmentSink:
         can show a stable verse (marked interim); their preview is returned for
         the sender."""
         now = seg.t_audio if seg.t_audio is not None else seg.t_recv
+        self.session.stt_activity["final" if seg.is_final else "interim"] = seg.t_recv
         if not seg.is_final:
             if self.session.process_interim(seg.text, now, seq=seg.seq):
                 self._cancel_timer()

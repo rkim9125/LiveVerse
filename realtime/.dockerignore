@@ -1,0 +1,10 @@
+# Build context is realtime/. Only the backend code and the web pages go into
+# the image: no Bible text, recordings, logs, tests or local environments.
+*
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/app/
+!frontend/shared/
+!frontend/screen/
+!frontend/stt-check/
+**/__pycache__

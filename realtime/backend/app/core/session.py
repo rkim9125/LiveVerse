@@ -99,6 +99,9 @@ class Session:
         self._last_book: str | None = None  # from the latest _detect()
         self._last_found: tuple[list, str | None] = ([], None)  # mentions, trailing book
         self.carry = Carry()  # references split across final segments
+        # Wall time of the last segment of each kind from any speech source, for
+        # the screen's STT status (GET /api/stt).
+        self.stt_activity: dict[str, float | None] = {"final": None, "interim": None}
         self._watch: Candidate | None = None  # verse being watched in interim results
         self._watch_count = 0
         self._watch_since = 0.0

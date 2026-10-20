@@ -113,6 +113,18 @@ def detect_text(request: Request, body: DetectRequest) -> dict:
     }
 
 
+@router.get("/stt")
+def stt_activity(request: Request) -> dict:
+    """When speech last arrived, for the screen's STT status. Times are server
+    seconds since the epoch; now is included so clients need not trust their clock."""
+    activity = request.app.state.session.stt_activity
+    return {
+        "now": time.time(),
+        "last_final": activity["final"],
+        "last_interim": activity["interim"],
+    }
+
+
 @router.get("/session")
 def session_state(request: Request) -> dict:
     return request.app.state.session.state()

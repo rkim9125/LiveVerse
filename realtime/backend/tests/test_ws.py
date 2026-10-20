@@ -120,3 +120,17 @@ def test_interim_held_without_new_results_is_shown(settings, store):
         ws.send_json({"type": "rendered", "seq": 1, "t_render": 1.0, "from_interim": True})
     summary = client.get("/api/metrics/latency").json()
     assert summary["segments"] == 1
+
+
+def test_stt_activity_reports_the_last_segments(client):
+    assert client.get("/api/stt").json()["last_final"] is None
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        interim(ws, 1, "오늘은")
+        ws.receive_json()
+        final(ws, 1, "오늘은 함께 모였습니다")
+        ws.send_json({"type": "ping", "t_client": 1.0})
+        ws.receive_json()
+    body = client.get("/api/stt").json()
+    assert body["last_final"] is not None and body["last_interim"] is not None
+    assert body["last_final"] <= body["now"]
