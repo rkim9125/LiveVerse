@@ -295,3 +295,23 @@ def test_search_ends_the_interim_watch(session):
     session.search("롬 8:28", now=0.2)
     assert not session.tick(1.0)
     assert shown(session) == "rm 8:28" and session.shown.manual
+
+
+# References split across final segments (tests/fixtures/carry_cases.jsonl).
+
+
+def _carry_cases():
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).with_name("fixtures") / "carry_cases.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+@pytest.mark.parametrize("case", _carry_cases(), ids=lambda c: c["id"])
+def test_split_references(session, case):
+    seen = []
+    for t, text in case["segments"]:
+        session.process_final(text, now=float(t))
+        seen.append(shown(session))
+    assert seen == case["shown"], case["note"]

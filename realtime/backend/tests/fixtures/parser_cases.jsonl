@@ -158,3 +158,9 @@
 {"id": "ko-oor-009", "lang": "ko", "mode": "spoken", "input": "다음 절", "context": null, "expect": [], "guesses": [], "spoken_book": "rm", "tags": ["out_of_range"], "context_book": "rm"}
 {"id": "ko-oor-010", "lang": "ko", "mode": "spoken", "input": "8장 28절을 보면", "context": null, "expect": [{"ref": "rm 8:28", "kind": "relative", "confidence": "high"}], "guesses": [], "spoken_book": null, "tags": ["out_of_range"], "context_book": "rm"}
 {"id": "ko-oor-011", "lang": "ko", "mode": "spoken", "input": "요한복음 17장 1절", "context": null, "context_book": "rm", "expect": [{"ref": "jo 17:1", "kind": "absolute"}], "guesses": [], "spoken_book": null, "tags": ["out_of_range"]}
+{"id": "ko-num-020", "lang": "ko", "mode": "spoken", "input": "룻기 이장", "context": null, "expect": [{"ref": "rt 2"}], "tags": ["numerals", "after-book"]}
+{"id": "ko-num-021", "lang": "ko", "mode": "spoken", "input": "창세기 이장 삼절", "context": null, "expect": [{"ref": "gn 2:3"}], "tags": ["numerals"]}
+{"id": "ko-num-022", "lang": "ko", "mode": "spoken", "input": "룻기 일장 이절", "context": null, "expect": [{"ref": "rt 1:2"}], "tags": ["numerals"]}
+{"id": "ko-num-023", "lang": "ko", "mode": "spoken", "input": "이장님이 오셨습니다", "context": null, "expect": [], "tags": ["numerals", "negative"]}
+{"id": "ko-num-024", "lang": "ko", "mode": "spoken", "input": "사장님 일장 연설", "context": null, "expect": [], "tags": ["numerals", "negative"]}
+{"id": "ko-num-025", "lang": "ko", "mode": "spoken", "input": "이 장에서 보면", "context": null, "expect": [], "tags": ["numerals", "negative"]}

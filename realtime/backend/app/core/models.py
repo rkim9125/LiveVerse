@@ -73,6 +73,10 @@ class Mention:
     # chapter ("이사야 40장입니다. 이사야 40장 27절"). Both are kept; the console
     # shows the verse and hides this one.
     superseded: bool = False
+    # "1절부터" with no end: the end may come in the next segment ("3절까지").
+    open_start: bool = False
+    # "3절까지": the end of a range whose start may be in the previous segment.
+    until: bool = False
 
     @property
     def is_high(self) -> bool:

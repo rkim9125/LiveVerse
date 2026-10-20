@@ -37,6 +37,7 @@ from app.core.models import Reference
 from app.core.store import BibleStore
 from app.detect.announce import ANNOUNCE_RE
 from app.detect.books import looks_like_book
+from app.detect.carry import Carry
 from app.detect.normalize import normalize
 from app.detect.pipeline import analyze
 from app.detect.quotes import QuoteIndex
@@ -96,6 +97,8 @@ class Session:
         self.spoken_book: str | None = None
         self.spoken_announced = False
         self._last_book: str | None = None  # from the latest _detect()
+        self._last_found: tuple[list, str | None] = ([], None)  # mentions, trailing book
+        self.carry = Carry()  # references split across final segments
         self._watch: Candidate | None = None  # verse being watched in interim results
         self._watch_count = 0
         self._watch_since = 0.0
@@ -116,9 +119,15 @@ class Session:
 
     def _detect(self, text: str, seq: int | None, now: float) -> list[Candidate]:
         found = analyze(
-            text, context=self.spoken, context_book=self.spoken_book, known_books=self.known_books
+            text,
+            context=self.spoken,
+            context_book=self.spoken_book,
+            lead_book=self.carry.lead_book(now),
+            known_books=self.known_books,
         )
+        mentions = self.carry.join(found.mentions, now)
         self._last_book = found.book
+        self._last_found = (mentions, found.trailing_book)
         cands = [
             Candidate(
                 id=self._new_id(),
@@ -132,7 +141,7 @@ class Session:
                 span=m.span,
                 fuzzy_from=m.fuzzy_from,
             )
-            for m in found.mentions
+            for m in mentions
         ]
         cands += [
             Candidate(
@@ -320,6 +329,7 @@ class Session:
     def process_final(self, text: str, now: float, seq: int | None = None) -> bool:
         """Handle a final transcript segment. Returns True if the state changed."""
         cands = self._detect(text, seq, now)
+        self.carry.update(*self._last_found, now)
         self.recent.append((now, text))
         while self.recent and now - self.recent[0][0] > RECENT_S:
             self.recent.popleft()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 
 from app.core.models import Mention, Mode, Reference
@@ -11,6 +12,11 @@ from app.detect.parser import parse
 
 # Added when the segment contains a phrase like "말씀입니다" or "let's read".
 TRIGGER_BONUS = 0.1
+_FROM_RE = re.compile(r"\s*(?:에서\s*)?부터")
+_UNTIL_RE = re.compile(r"\s*까지")
+# A chapter at most this far into the segment can take a book carried over from
+# the previous segment ("룻기" / "2장 1절").
+_LEAD_CHARS = 6
 
 
 @dataclass
@@ -25,6 +31,7 @@ class Detection:
     mentions: list[Mention] = field(default_factory=list)
     guesses: list[Mention] = field(default_factory=list)
     book: str | None = None
+    trailing_book: str | None = None  # see ParseResult.trailing_book
 
 
 def detect(
@@ -46,6 +53,7 @@ def analyze(
     mode: Mode = "spoken",
     context: Reference | str | None = None,
     context_book: str | None = None,
+    lead_book: str | None = None,
     known_books: frozenset[str] | set[str] = frozenset(),
 ) -> Detection:
     """Find Bible references in one transcript segment.
@@ -56,7 +64,8 @@ def analyze(
     "다음 절" and similar. known_books are books already shown in this service;
     the displayed book is always included. They allow looser matches for
     misheard book names. context_book is a book said last with a chapter it
-    does not have; it replaces context.
+    does not have; it replaces context. lead_book is a book the previous
+    segment ended on; a chapter at the start of this segment belongs to it.
     """
     if isinstance(context, str):
         context = Reference.parse(context)
@@ -65,6 +74,9 @@ def analyze(
     norm = normalize(text)
     known = frozenset(known_books) | ({context.book} if context else frozenset())
     result = parse(norm, mode, known)
+    first = result.mentions[0] if result.mentions else None
+    if lead_book and first is not None and first.op == "chapter" and first.start <= _LEAD_CHARS:
+        context_book = lead_book
     resolved, guessed, book = resolve_all(result.mentions, context, context_book)
     mentions: list[Mention] = []
     for raw, ref, kind, conf in resolved:
@@ -83,13 +95,20 @@ def analyze(
                 (start, end),
                 round(conf, 2),
                 fuzzy_from=raw.fuzzy_from,
+                open_start=bool(
+                    ref.verse_start is not None
+                    and ref.verse_end is None
+                    and not ref.open_ended
+                    and _FROM_RE.match(norm.text, raw.end)
+                ),
+                until=bool(_UNTIL_RE.match(norm.text, raw.end)),
             )
         )
     guesses = []
     for raw, ref, kind, conf in guessed:
         start, end = norm.original_span(raw.start, raw.end)
         guesses.append(Mention(ref, kind, norm.original[start:end], (start, end), conf))
-    return Detection(_mark_superseded(mentions), guesses, book)
+    return Detection(_mark_superseded(mentions), guesses, book, result.trailing_book)
 
 
 def _repeats_displayed_chapter(ref: Reference, displayed: Reference | None) -> bool:

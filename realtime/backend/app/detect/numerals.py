@@ -7,6 +7,7 @@ an offset map back to the original transcript.
 from __future__ import annotations
 
 import re
+from functools import cache
 
 # ── Korean ──
 
@@ -72,6 +73,25 @@ _KO_RUN_RE = re.compile(
 _KO_DENY = {"사장", "이장", "구장", "오장", "일장", "구절", "일절", "사절", "이편", "일편"}
 
 
+@cache
+def _after_book_re() -> re.Pattern[str]:
+    from app.detect.books import book_regex
+
+    return re.compile(f"(?:{book_regex('spoken').pattern})\\s*$")
+
+
+# A verse number after a chapter: "일장 이절", "이장 3절".
+_VERSE_AFTER_RE = re.compile(r"\s*[일이삼사오육륙칠팔구십백\d]+\s*절")
+
+
+def _reference_context(text: str, m: re.Match[str]) -> bool:
+    """The counter is part of a reference: right after a book name ("룻기 이장"),
+    or a chapter followed by a verse ("일장 이절")."""
+    if _after_book_re().search(text[: m.start(1)].lower()):
+        return True
+    return m.group(3) == "장" and bool(_VERSE_AFTER_RE.match(text, m.end(3)))
+
+
 def find_korean_numbers(text: str) -> list[tuple[int, int, str]]:
     """Find Sino-Korean numbers used with 장/편/절 and return digit replacements."""
     out = []
@@ -80,7 +100,7 @@ def find_korean_numbers(text: str) -> list[tuple[int, int, str]]:
         value = sino_to_int(run)
         if value is None:
             continue
-        if len(run) == 1:
+        if len(run) == 1 and not _reference_context(text, m):
             # "이 장", "이 절" usually mean "this chapter / this verse".
             if space and run == "이":
                 continue

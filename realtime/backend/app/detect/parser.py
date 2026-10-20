@@ -109,6 +109,9 @@ class RawMention:
 class ParseResult:
     mentions: list[RawMention] = field(default_factory=list)
     trigger: bool = False
+    # A book name at the end of the segment with no chapter after it ("본문은
+    # 룻기"). The next segment may start with the chapter.
+    trailing_book: str | None = None
 
 
 @dataclass
@@ -488,4 +491,16 @@ def parse(
         if t.type in simple:
             out.append(RawMention(simple[t.type], t.start, t.end))
         i += 1
+    result.trailing_book = _trailing_book(text, toks, out, pending, mode)
     return result
+
+
+def _trailing_book(
+    text: str, toks: list[Token], out: list[RawMention], pending: Token | None, mode: Mode
+) -> str | None:
+    if pending is not None and len(text) - pending.end <= _PENDING_BOOK_WINDOW:
+        return lookup(pending.text, mode)
+    rest = [t for t in toks if t.type != "SENT"]
+    if rest and rest[-1].type == "BOOK" and not any(m.end > rest[-1].start for m in out):
+        return lookup(rest[-1].text, mode)
+    return None
