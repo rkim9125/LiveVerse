@@ -24,7 +24,7 @@ from pathlib import Path
 
 def convert(capture: dict, run: dict) -> dict:
     t0, clip = run["t0"], run["clip_start"]
-    end_limit = clip + run.get("duration", float("inf")) + 30  # recognition can lag the audio
+    end_limit = clip + (run.get("duration") or float("inf")) + 30  # recognition can lag the audio
     segments = []
     for s in capture["segments"]:
         start, end = clip + (s["start"] - t0), clip + (s["end"] - t0)

@@ -106,7 +106,7 @@ def render_of(seg: dict, renders: list[dict]) -> dict | None:
 
 def measure(gold: list[dict], run: dict, records: list[dict], wait: float = WAIT_S) -> dict:
     t0, clip = run["t0"], run["clip_start"]
-    clip_end = clip + run.get("duration", float("inf"))
+    clip_end = clip + (run.get("duration") or float("inf"))
     gold = [g for g in gold if clip <= g["end"] <= clip_end]
     sent = sorted(
         (r for r in records if r.get("event") == "segment" and r.get("t_sent") and r.get("shown")),
@@ -177,7 +177,7 @@ def screen_accuracy(gold: list[dict], run: dict, sent: list[dict], wait: float =
     reverts   interim displays taken back because the final did not contain them
     """
     t0, clip = run["t0"], run["clip_start"]
-    t_end = t0 + run.get("duration", float("inf")) + wait
+    t_end = t0 + (run.get("duration") or float("inf")) + wait
     changes = correct = reverts = 0
     last = None
     for r in sent:

@@ -202,3 +202,10 @@ def test_gold_time_is_the_verse_not_the_chapter_said_before_it():
     assert latency.gold_mentions(labels, preds)[0]["end"] == 111.0
     only_chapter = [{"t_start": 100.0, "t_end": 120.0, "correct_refs": ["rt 4"]}]
     assert latency.gold_mentions(only_chapter, preds)[0]["end"] == 102.0
+
+
+def test_latency_for_a_whole_recording_with_no_duration():
+    run = {"t0": 5000.0, "clip_start": 0.0, "duration": None}
+    gold = [{"refs": ["jo 3:16"], "end": 10.0, "approx": False}]
+    out = latency.measure(gold, run, [])
+    assert (out["gold"], out["missed"]) == (1, 1)
