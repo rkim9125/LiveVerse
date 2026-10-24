@@ -17,13 +17,14 @@ Reported per configuration and window:
   F1                            the finals scored with score.py (slack 1 s)
 
 Usage (from realtime/backend, dev sermons only):
-    uv run python eval/stream_sim.py --config base max8 interim05 \\
+    uv run python eval/stream_sim.py --config base max8 interim05 --pre 120 \\
         --windows sermon-01:180 sermon-02:3300
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import statistics
@@ -189,11 +190,17 @@ def replay(events: list[dict], session: Session) -> list[dict]:
     return session.history
 
 
-def measure(history: list[dict], gold: list[dict], clip: float, duration: float) -> dict:
+def measure(
+    history: list[dict], gold: list[dict], clip: float, duration: float, pre: float = 0.0
+) -> dict:
+    """Latency and screen accuracy for gold said in [clip, clip + duration].
+    Virtual time 0 is the start of the audio, pre seconds before the clip."""
+    origin = clip - pre
     gold = [g for g in gold if clip <= g["end"] <= clip + duration]
+    history_in_clip = [h for h in history if h["t"] >= pre]
     lat, already, missed, detail = [], 0, 0, []
     for g in gold:
-        end = g["end"] - clip
+        end = g["end"] - origin
         before = [h for h in history if h["t"] < end - 1.0]
         if before and before[-1]["ref"] in g["refs"]:
             already += 1
@@ -217,7 +224,7 @@ def measure(history: list[dict], gold: list[dict], clip: float, duration: float)
             )
     changes = correct = reverts = 0
     last = None
-    for h in history:
+    for h in history_in_clip:
         reverts += h["reason"] == "revert"
         if h["ref"] == last or h["ref"] is None:
             last = h["ref"]
@@ -225,7 +232,8 @@ def measure(history: list[dict], gold: list[dict], clip: float, duration: float)
         last = h["ref"]
         changes += 1
         correct += any(
-            h["ref"] in g["refs"] and h["t"] - WAIT_S <= g["end"] - clip <= h["t"] + 1 for g in gold
+            h["ref"] in g["refs"] and h["t"] - WAIT_S <= g["end"] - origin <= h["t"] + 1
+            for g in gold
         )
     n = len(gold) - already
     s = sorted(lat)
@@ -250,6 +258,18 @@ def measure(history: list[dict], gold: list[dict], clip: float, duration: float)
     }
 
 
+def events_cache(sermon: str, clip: float, duration: float, pre: float, cfg: SimConfig) -> Path:
+    """Decoded events depend on the audio, the segmenter and the interim
+    schedule, not on the session settings, so configs that differ only in those
+    share them. Kept outside the repo (they hold transcript text)."""
+    key = json.dumps(
+        [cfg.segmenter.__dict__, cfg.interim_s, cfg.interim_min_s, cfg.tail_s], sort_keys=True
+    )
+    digest = hashlib.sha1(key.encode()).hexdigest()[:10]
+    name = f"{sermon}-{clip:.0f}-{duration:.0f}-pre{pre:.0f}-{digest}.json"
+    return corpus_dir() / "reports" / "sim-events" / name
+
+
 def main() -> None:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -257,6 +277,12 @@ def main() -> None:
     p.add_argument("--config", nargs="+", default=["base"], choices=sorted(CONFIGS))
     p.add_argument("--windows", nargs="+", default=["sermon-01:180", "sermon-02:3300"])
     p.add_argument("--duration", type=float, default=600.0)
+    p.add_argument(
+        "--pre",
+        type=float,
+        default=120.0,
+        help="seconds played before each window so the session has context (not measured)",
+    )
     args = p.parse_args()
 
     import score
@@ -278,23 +304,33 @@ def main() -> None:
         if meta.get("split") != "dev":
             raise SystemExit(f"{sermon} is not a dev sermon")
         audio = np.array(load_audio(str(d / "audio.wav")), dtype=np.float32)
-        audio = audio[int(clip * SR) : int((clip + args.duration) * SR)]
-        probs = vad_probs(audio)
+        pre = min(args.pre, clip)
+        origin = clip - pre
+        audio = audio[int(origin * SR) : int((clip + args.duration) * SR)]
+        probs = None  # computed on first use; cached events skip it
         labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
         labels = [c for c in labels if c.get("decision") in ("accept", "fix")]
         gold = gold_mentions(labels, whisper_predictions(d / "whisper.json"))
         for name in args.config:
             cfg = CONFIGS[name]
             t = time.time()
-            events = simulate(audio, probs, cfg, decoder)
+            cache = events_cache(sermon, clip, args.duration, pre, cfg)
+            if cache.exists():
+                events = json.loads(cache.read_text())
+            else:
+                if probs is None:
+                    probs = vad_probs(audio)
+                events = simulate(audio, probs, cfg, decoder)
+                cache.parent.mkdir(exist_ok=True)
+                cache.write_text(json.dumps(events, ensure_ascii=False))
             s = replace(settings, interim_repeats=cfg.repeats, interim_hold_s=cfg.hold_s)
             history = replay(events, Session(store, s, quotes=quotes))
-            m = measure(history, gold, clip, args.duration)
+            m = measure(history, gold, clip, args.duration, pre)
             out = f"whisperstream.sim-{name}.json"
             segs = [
                 {
-                    "start": round(clip + e["start"], 2),
-                    "end": round(clip + e["end"], 2),
+                    "start": round(origin + e["start"], 2),
+                    "end": round(origin + e["end"], 2),
                     "text": e["text"],
                 }
                 for e in events
@@ -316,7 +352,7 @@ def main() -> None:
                 "interims": sum(not e["final"] for e in events),
                 "sim_s": round(time.time() - t),
             }
-            results.append({"window": w, "config": name, **m})
+            results.append({"window": w, "config": name, "pre": pre, **m})
             print(json.dumps(results[-1]), flush=True)
     out = corpus_dir() / "reports" / f"stream-sim-{time.strftime('%Y%m%d-%H%M')}.json"
     out.write_text(json.dumps(results, indent=1))
