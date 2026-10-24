@@ -45,6 +45,7 @@ class MlxDecoder:
         self.repo = MODELS.get(model, model)
         self.prompt = prompt
         self.language = language
+        self.dropped = 0  # decodes thrown away as repetition loops
 
     def warm_up(self) -> None:
         self.decode(np.zeros(16000, dtype=np.float32))
@@ -67,5 +68,7 @@ class MlxDecoder:
         for seg in result.get("segments", []):
             for w in seg.get("words", []) if words else []:
                 out.append((float(w["start"]), float(w["end"]), w["word"]))
-        text = drop_repetition("".join(s["text"] for s in result.get("segments", [])).strip())
+        raw = "".join(s["text"] for s in result.get("segments", [])).strip()
+        text = drop_repetition(raw)
+        self.dropped += bool(raw and not text)
         return Decoded(text, out if text else [], time.perf_counter() - t)

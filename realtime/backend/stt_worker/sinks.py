@@ -64,12 +64,14 @@ class RecordSink:
         self.finals: list[dict] = []
         self.decode = {"final": [], "interim": []}
         self.lag: list[float] = []  # utterance end to result, live only
+        self.lag_series: list[tuple[float, float]] = []  # (stream seconds, lag)
 
     async def __call__(self, r: Result) -> None:
         kind = "final" if r.is_final else "interim"
         self.decode[kind].append(r.decoded.seconds)
         if self.t0 is not None and r.is_final:
             self.lag.append(time.time() - (self.t0 + r.utterance.end))
+            self.lag_series.append((round(r.utterance.end, 1), round(self.lag[-1], 3)))
         if not r.is_final:
             return
         u, o = r.utterance, self.offset
@@ -105,4 +107,8 @@ class RecordSink:
                 "max_s": round(lengths[-1], 1) if lengths else None,
             },
             "end_to_final": ms(self.lag),
+            "end_to_final_by_10_min": [
+                {"from_s": b * 600, **ms([lag for t, lag in self.lag_series if t // 600 == b])}
+                for b in sorted({int(t // 600) for t, _ in self.lag_series})
+            ],
         }

@@ -152,3 +152,27 @@ def test_repetition_loops_are_dropped():
     assert drop_repetition("아멘 아멘") == "아멘 아멘"  # too short to call a loop
     said = "거룩 거룩 거룩 거룩하신 주님을 우리가 찬양하며 함께 모여 예배합니다 오늘도"
     assert drop_repetition(said) == said
+
+
+def test_record_sink_lag_by_ten_minutes():
+    from stt_worker.sinks import RecordSink
+
+    sink = RecordSink(offset=100.0)
+    sink.lag_series = [(10.0, 1.0), (20.0, 1.2), (700.0, 0.9)]
+    bins = sink.stats()["end_to_final_by_10_min"]
+    assert [(b["from_s"], b["n"]) for b in bins] == [(0, 2), (600, 1)]
+
+
+def test_decoder_counts_dropped_loops(monkeypatch):
+    import sys
+    import types
+
+    from stt_worker.decoder import MlxDecoder
+
+    fake = types.SimpleNamespace(
+        transcribe=lambda *a, **k: {"segments": [{"text": "요한일서 " * 10}]}
+    )
+    monkeypatch.setitem(sys.modules, "mlx_whisper", fake)
+    dec = MlxDecoder("turbo")
+    assert dec.decode(np.zeros(16000, np.float32)).text == ""
+    assert dec.dropped == 1

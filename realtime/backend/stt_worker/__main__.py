@@ -97,36 +97,57 @@ async def main_async(args: argparse.Namespace) -> None:
                 yield f
 
         t = time.time()
+        dest = output_path(args, stamp)
+
+        def snapshot(partial: bool) -> dict:
+            return {
+                "source": "whisperstream",
+                "partial": partial,
+                "model": args.model,
+                "prompt": not args.no_prompt,
+                "interim": not args.no_interim,
+                "hangover_s": args.hangover_s,
+                "max_s": args.max_s,
+                "realtime": bool(args.realtime or args.device),
+                "clip_start": None if args.device else args.start,
+                "duration": None if args.device else args.duration,
+                "elapsed_s": round(time.time() - t, 1),
+                "worker": worker.stats | {"dropped_loops": decoder.dropped},
+                "stats": record.stats(),
+                "segments": record.finals,
+            } | ({"time_base": "epoch_seconds"} if args.device else {})
+
+        async def checkpoints() -> None:
+            # A long run keeps its results so far if it is stopped or crashes.
+            while dest is not None:
+                await asyncio.sleep(args.checkpoint_s)
+                write(dest, snapshot(partial=True))
+
+        saver = asyncio.create_task(checkpoints())
         with contextlib.suppress(KeyboardInterrupt, asyncio.CancelledError):
             await worker.run(frames())
-        elapsed = time.time() - t
+        saver.cancel()
 
-    out = {
-        "source": "whisperstream",
-        "model": args.model,
-        "prompt": not args.no_prompt,
-        "interim": not args.no_interim,
-        "hangover_s": args.hangover_s,
-        "max_s": args.max_s,
-        "realtime": bool(args.realtime or args.device),
-        "clip_start": None if args.device else args.start,
-        "duration": None if args.device else args.duration,
-        "elapsed_s": round(elapsed, 1),
-        "worker": worker.stats,
-        "stats": record.stats(),
-        "segments": record.finals,
-    }
+    out = snapshot(partial=False)
     print(json.dumps({k: out[k] for k in ("elapsed_s", "worker", "stats")}, indent=1))
+    if dest is not None:
+        write(dest, out)
+        print(f"wrote {dest}")
+
+
+def output_path(args: argparse.Namespace, stamp: str) -> Path | None:
     if args.no_save:
-        return  # live use: keep no transcript on disk
+        return None  # live use: keep no transcript on disk
     if args.device:
-        out["time_base"] = "epoch_seconds"
-        dest = corpus_dir() / "captures" / f"whisperstream-capture-{stamp}.json"
-    else:
-        dest = corpus_dir() / args.sermon / f"whisperstream.{args.name or stamp}.json"
+        return corpus_dir() / "captures" / f"whisperstream-capture-{stamp}.json"
+    return corpus_dir() / args.sermon / f"whisperstream.{args.name or stamp}.json"
+
+
+def write(dest: Path, out: dict) -> None:
     dest.parent.mkdir(exist_ok=True)
-    dest.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"wrote {dest}")
+    tmp = dest.with_suffix(".tmp")
+    tmp.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(dest)
 
 
 def write_run(args: argparse.Namespace, stamp: str, t0: float) -> None:
@@ -173,6 +194,7 @@ def main() -> None:
     p.add_argument("--words", action="store_true", help="word times in finals (slower)")
     p.add_argument("--name", help="output name instead of the time")
     p.add_argument("--no-save", action="store_true", help="write no transcript file (live use)")
+    p.add_argument("--checkpoint-s", type=float, default=60.0, help="save results this often")
     asyncio.run(main_async(p.parse_args()))
 
 
