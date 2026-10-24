@@ -56,7 +56,7 @@ def recording(sermon_dir: Path) -> Path:
 async def main_async(args: argparse.Namespace) -> None:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.device:
-        source = DeviceSource(args.device)
+        source = DeviceSource(None if args.device == "default" else args.device)
         offset = 0.0  # set to t0 once the stream starts
     else:
         d = corpus_dir() / args.sermon
@@ -116,6 +116,9 @@ async def main_async(args: argparse.Namespace) -> None:
         "stats": record.stats(),
         "segments": record.finals,
     }
+    print(json.dumps({k: out[k] for k in ("elapsed_s", "worker", "stats")}, indent=1))
+    if args.no_save:
+        return  # live use: keep no transcript on disk
     if args.device:
         out["time_base"] = "epoch_seconds"
         dest = corpus_dir() / "captures" / f"whisperstream-capture-{stamp}.json"
@@ -123,7 +126,6 @@ async def main_async(args: argparse.Namespace) -> None:
         dest = corpus_dir() / args.sermon / f"whisperstream.{args.name or stamp}.json"
     dest.parent.mkdir(exist_ok=True)
     dest.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(json.dumps({k: out[k] for k in ("elapsed_s", "worker", "stats")}, indent=1))
     print(f"wrote {dest}")
 
 
@@ -157,7 +159,7 @@ def main() -> None:
     )
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--sermon", help="dev sermon folder in the corpus")
-    src.add_argument("--device", help="live input device name")
+    src.add_argument("--device", help='live input device name, or "default"')
     p.add_argument("--start", type=float, default=0.0)
     p.add_argument("--duration", type=float)
     p.add_argument("--realtime", action="store_true", help="feed the file at live pace")
@@ -170,6 +172,7 @@ def main() -> None:
     p.add_argument("--max-s", type=float, default=12.0, help="longest utterance before a cut")
     p.add_argument("--words", action="store_true", help="word times in finals (slower)")
     p.add_argument("--name", help="output name instead of the time")
+    p.add_argument("--no-save", action="store_true", help="write no transcript file (live use)")
     asyncio.run(main_async(p.parse_args()))
 
 

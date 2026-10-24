@@ -45,7 +45,7 @@ class DeviceSource:
     """A live input device (a microphone, or BlackHole for evaluation). Audio is
     taken at the device rate and resampled to 16 kHz."""
 
-    def __init__(self, device: str):
+    def __init__(self, device: str | None):
         import sounddevice as sd
 
         info = sd.query_devices(device, "input")
