@@ -8,6 +8,7 @@ Done so far:
 - **Stage 2:** the server. It provides a FastAPI app with REST and WebSocket endpoints and one in-memory session for the interpreter screen, packaged with Docker.
 - **Stage 3:** speech input. Chrome's Web Speech API transcribes Korean in the browser, and a minimal STT check page at `/ui/stt-check/` sends the segments to the server. Testing it, BlackHole setup and the evaluation procedure are in [docs/stt-testing.md](../../docs/stt-testing.md).
 
+- **Whisper streaming (default speech input):** `stt_worker/` runs on the host, transcribes the microphone with Silero VAD and mlx-whisper, and sends segments to `/ws` like the browser. Web Speech stays as the fallback. See [docs/stt-testing.md](../../docs/stt-testing.md).
 - **Stage 4:** the interpreter screen at `/ui/screen/` (also `/`). It shows the passage large with Korean and English side by side, the alternatives on keys 1 to 3, the source and confidence of what is shown, and interim displays marked as such. It has keyboard shortcuts (`?` lists them), light and dark themes, text size, and a speech status. Speech comes from the Listen button (Web Speech in Chrome) or from another source such as the Whisper worker.
 
 Reading confirmation and the LLM come in later stages.

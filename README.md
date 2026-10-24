@@ -87,12 +87,65 @@ scripts/check_no_copyrighted.sh   blocks copyrighted Bible text from commits
 docs/screenshot.png               README screenshot
 ```
 
-## Roadmap
+## Real-time sermon assistant
 
-- **Real-time sermon assistant for the interpreter:** use speech-to-text to pick up verse references as the preacher says them, and put the most likely passage on the interpreter's own screen right away, with other candidates beside it. When the preacher reads the passage aloud, the reading confirms the verse and the screen follows along verse by verse.
-- **Backend API:** serve verse lookups from an API, so other tools such as slide software and the detection service can use the same data.
+The `feature/realtime` branch adds a live assistant for the interpreter. It listens to the sermon, finds verse references as the preacher says them ("요한복음 3장 16절", "다음 절", or a verse quoted without its number), and shows the passage on the interpreter's own screen in Korean and English, with other candidates beside it. The design is in [docs/realtime-design.md](docs/realtime-design.md).
 
-The design for both is in [docs/realtime-design.md](docs/realtime-design.md).
+How it is put together:
+
+- **Speech to text:** a worker on the same Mac (`realtime/backend/stt_worker`) cuts the microphone input into utterances with Silero VAD and transcribes them with Whisper (mlx-whisper, large-v3-turbo) and a prompt of Bible book names. Nothing leaves the computer. Chrome's Web Speech API is kept as a fallback (the Listen button on the screen).
+- **Server:** FastAPI with one WebSocket. It detects references in each transcript segment, keeps track of where the preacher is, and decides what the screen shows.
+- **Interpreter screen:** a web page served by the server, at `http://127.0.0.1:8000/`.
+
+### Requirements
+
+- A Mac with Apple Silicon for the Whisper worker (the server and the screen run anywhere)
+- [uv](https://docs.astral.sh/uv/) and `ffmpeg` (`brew install uv ffmpeg`)
+- Your licensed `data/bible_data.js` for Korean and NKJV text; without it the server uses the KJV sample
+
+### Running it
+
+One command starts the server and the Whisper worker on the default microphone, and opens the screen:
+
+```sh
+./run-live.sh                         # Ctrl+C stops everything
+./run-live.sh --device "MacBook Pro Microphone"
+./run-live.sh --list-devices
+```
+
+Or start the parts yourself:
+
+```sh
+cd realtime/backend
+uv sync --group stt
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000          # server
+uv run python -m stt_worker --device "MacBook Pro Microphone" \
+  --ws ws://127.0.0.1:8000/ws                                     # Whisper worker
+open http://127.0.0.1:8000/                                       # interpreter screen
+```
+
+On the screen, keys 1 to 3 switch to an alternative, Esc clears, / searches, + and - change the text size, and ? lists the rest.
+
+### Docker
+
+The server and the screen can also run in Docker. The Whisper worker cannot, because a container on macOS has no access to the Metal GPU; run it on the host and point it at the container's port.
+
+```sh
+cd realtime
+docker build -f backend/Dockerfile -t liveverse-backend:dev .
+VERSION=$(git describe --tags --always) docker compose up --build
+```
+
+The image holds no Bible text. The repo's `data/` folder is mounted read only.
+
+### Tests
+
+```sh
+cd realtime/backend && uv run pytest && uv run ruff check .
+cd realtime/frontend && node --test tests/ && npm install && npm run e2e
+```
+
+GitHub Actions runs these, the copyright check, and a Docker build with an image check on every push to `feature/realtime`. More on the backend, the evaluation on recorded sermons and speech testing is in [realtime/backend/README.md](realtime/backend/README.md) and [docs/stt-testing.md](docs/stt-testing.md).
 
 ## License
 

@@ -27,7 +27,7 @@ Help a church interpreter during live sermons. The interpreter reads the NKJV on
 4. **The reading is the strongest evidence.**
    - When the preacher starts reading, the words are matched against the Bible text to confirm, correct or fill in the shown verse (#12).
    - While the reading goes on, the screen highlights the verse being read (#13).
-5. **Speech recognition is swappable.** The first version uses the browser Web Speech API. Server-side Whisper can replace it later.
+5. **Speech recognition is swappable.** The default is a Whisper streaming worker on the same Mac; the browser Web Speech API is the fallback.
 6. **Backend is Python FastAPI** with REST and WebSocket endpoints, packaged with Docker.
 7. **The static demo stays as it is.** New work lives in `realtime/` on the `feature/realtime` branch.
 8. **Copyrighted text stays local.** NKJV and 개역한글 are loaded at run time from the local `data/` folder. They are never committed or put in images. The public demo uses the KJV.
@@ -42,9 +42,10 @@ Help a church interpreter during live sermons. The interpreter reads the NKJV on
 
 ```mermaid
 flowchart LR
-    subgraph Laptop["Interpreter laptop (browser)"]
+    subgraph Laptop["Interpreter laptop"]
         MIC["Audio input<br/>(mixer feed)"]
-        STT["STT adapter<br/>Web Speech API"]
+        WHISPER["Whisper streaming worker<br/>host process, default"]
+        STT["Web Speech API<br/>in the browser, fallback"]
         SCREEN["Interpreter screen<br/>shown verse, alternatives,<br/>reading highlight"]
     end
 
@@ -62,17 +63,16 @@ flowchart LR
         RANK["Ranker and<br/>display policy"]
         SESS["Session state"]
         STORE["Bible store"]
-        WHISPER["Whisper STT<br/>later"]
     end
 
     DATA[("data/bible_data.js<br/>local only<br/>or KJV sample")]
     OLLAMA["Ollama (local)"]
     CLAUDE["Claude API"]
 
-    MIC --> STT
-    STT -- "transcript segments" --> WS
-    MIC -. "audio (later)" .-> WHISPER
-    WHISPER -.-> NORM
+    MIC --> WHISPER
+    WHISPER -- "transcript segments" --> WS
+    MIC -.-> STT
+    STT -. "transcript segments" .-> WS
     WS --> NORM --> RULE --> CTX --> GATE --> RANK
     WS --> QUOTE --> RANK
     WS --> READ --> RANK
@@ -120,8 +120,9 @@ sequenceDiagram
 ### 3.1 Audio input and STT adapter
 
 - The adapter turns audio into text segments: `{text, is_final, lang, t_client}`.
-- **Stage 3: browser Web Speech API.** Chrome on the interpreter laptop, `lang="ko-KR"`, interim results on, automatic restart. Segments go to the backend over the WebSocket.
-- **Whisper streaming worker (experiment).** A separate process on the same Mac (`realtime/backend/stt_worker`) reads the audio input, cuts it into utterances with Silero VAD, decodes each with mlx-whisper and the book name prompt, and sends interim and final segments to `/ws` like the browser does. Nothing in the server or the screen changes.
+- **Default: the Whisper streaming worker** (below). It runs on the Mac without a network connection, takes the book name prompt, and in the dev evaluation put references on screen faster than Web Speech (median 1.7 s against 2.1 s from speech end, live).
+- **Fallback: browser Web Speech API.** Chrome on the interpreter laptop, `lang="ko-KR"`, interim results on, automatic restart. Segments go to the backend over the WebSocket. Use it when the worker cannot run (no Apple Silicon). It sends the audio to Google.
+- **Whisper streaming worker.** A separate process on the same Mac (`realtime/backend/stt_worker`) reads the audio input, cuts it into utterances with Silero VAD, decodes each with mlx-whisper and the book name prompt, and sends interim and final segments to `/ws` like the browser does. Nothing in the server or the screen changes.
   - Why a host process and not the backend: the backend runs in Docker, and a container on macOS cannot use the Metal GPU that mlx needs. Reading the input device on the host also avoids streaming audio from the browser.
   - Interims: the utterance so far is decoded every 1 s. Finals: when 0.4 s of silence ends the utterance, or at 12 s (cut at the quietest frame).
   - One mlx-whisper call (large-v3-turbo) took 0.65 to 0.8 s for 1 to 12 s of audio on an M3 Pro, so decoding keeps up with 1 s interims.
