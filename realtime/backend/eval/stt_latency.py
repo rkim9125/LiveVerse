@@ -64,17 +64,23 @@ def gold_mentions(labels: list[dict], whisper_preds: list[tuple[float, float, st
     A label window is a whole Whisper segment (up to 30 s). The end of the
     mention itself comes from detect() on the Whisper transcript with word
     timestamps; labels where detect() did not find the reference fall back to
-    the window end and are marked approximate."""
+    the window end and are marked approximate.
+
+    When a window's gold holds a verse and its chapter ("rt 4", "rt 4:14"), the
+    time is when the verse was said: a chapter named in passing before it is
+    not what the screen should show, so timing from it overstates latency."""
     out = []
     for c in labels:
         refs = c.get("correct_refs") or []
         if not refs:
             continue
-        ends = [
-            end
+        found = [
+            (end, ref)
             for start, end, ref in whisper_preds
             if ref in refs and c["t_start"] - 1 <= start and end <= c["t_end"] + 1
         ]
+        verses = [(end, ref) for end, ref in found if ":" in ref]
+        ends = [end for end, _ in (verses or found)]
         out.append({"refs": refs, "end": min(ends) if ends else c["t_end"], "approx": not ends})
     return sorted(out, key=lambda g: g["end"])
 

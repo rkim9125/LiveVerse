@@ -194,3 +194,11 @@ def test_screen_accuracy_counts_changes_and_reverts():
     ]
     sc = latency.screen_accuracy(gold, run, sent)
     assert (sc["changes"], sc["correct"], sc["reverts"]) == (3, 1, 1)
+
+
+def test_gold_time_is_the_verse_not_the_chapter_said_before_it():
+    labels = [{"t_start": 100.0, "t_end": 120.0, "correct_refs": ["rt 4", "rt 4:14"]}]
+    preds = [(101.0, 102.0, "rt 4"), (110.0, 111.0, "rt 4:14")]
+    assert latency.gold_mentions(labels, preds)[0]["end"] == 111.0
+    only_chapter = [{"t_start": 100.0, "t_end": 120.0, "correct_refs": ["rt 4"]}]
+    assert latency.gold_mentions(only_chapter, preds)[0]["end"] == 102.0
