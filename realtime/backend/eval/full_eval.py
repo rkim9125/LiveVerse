@@ -41,31 +41,37 @@ from app.main import _quote_index  # noqa: E402
 
 FULL_S = 4200.0  # longer than either dev sermon
 
-# Each variant: settings overrides (the session) and score.CARRY overrides (the scorer).
+# Each variant: which improvements are on. The base has none of the ones made
+# in this round; "+x" adds one alone; "all" is the current defaults.
+OFF = {"join_chapter": False, "join_runs": False, "join_tens": False, "verse_as_je": False}
+
+
+def _variant(**on) -> dict:
+    flags = OFF | on
+    carry = {k: flags[k] for k in ("join_chapter", "join_runs", "join_tens")}
+    reading = {k: flags.get(k, False) for k in ("reading", "reading_fill")}
+    return {"settings": carry | reading, "carry": carry, "verse_as_je": flags["verse_as_je"]}
+
+
+ALL = {"join_chapter": True, "join_runs": True, "join_tens": True, "verse_as_je": True}
 VARIANTS: dict[str, dict] = {
-    "base": {
-        "settings": {"join_chapter": False, "join_runs": False},
-        "carry": {"join_chapter": False, "join_runs": False},
-    },
-    "h": {
-        "settings": {"join_chapter": True, "join_runs": False},
-        "carry": {"join_chapter": True, "join_runs": False},
-    },
-    "d": {
-        "settings": {"join_chapter": False, "join_runs": True},
-        "carry": {"join_chapter": False, "join_runs": True},
-    },
-    "joins": {"settings": {}, "carry": {}},  # h and d, the current defaults
-    "joins+f": {"settings": {"reading": True}, "carry": {}},
-    "joins+f+fill": {"settings": {"reading": True, "reading_fill": True}, "carry": {}},
-    "joins-a": {"settings": {}, "carry": {}, "verse_as_je": False},  # without "7제" -> 7절
+    "base": _variant(),
+    "+h": _variant(join_chapter=True),
+    "+d": _variant(join_runs=True),
+    "+a": _variant(verse_as_je=True),
+    "+b": _variant(join_tens=True),
+    "+f": _variant(reading=True),
+    "+f+fill": _variant(reading=True, reading_fill=True),
+    "all": _variant(**ALL),
+    "all+f": _variant(**ALL, reading=True),
+    "all+f+fill": _variant(**ALL, reading=True, reading_fill=True),
 }
 
 
 def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     from app.detect import normalize
 
-    normalize.VERSE_AS_JE = variant.get("verse_as_je", True)
+    normalize.VERSE_AS_JE = variant["verse_as_je"]
     d = sim.corpus_dir() / sermon
     cache = sim.events_cache(sermon, 0.0, FULL_S, 0.0, sim.CONFIGS["repeat1"])
     if not cache.exists():

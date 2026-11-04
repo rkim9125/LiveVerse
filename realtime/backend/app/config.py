@@ -9,6 +9,7 @@ LIVEVERSE_INTERIM_REPEATS  consecutive interim results with the same verse to sh
 LIVEVERSE_INTERIM_HOLD_S   or seconds the same verse stays in the interim result (default 0.7)
 LIVEVERSE_JOIN_CHAPTER     on / off: "룻기 2장" / "7절" in two segments are one reference (on)
 LIVEVERSE_JOIN_RUNS        on / off: "19절" / "20절" in two segments are a range (default on)
+LIVEVERSE_JOIN_TENS        on / off: "10" / "7절" in two segments is 17절 (default on)
 LIVEVERSE_READING          on / off: a verse read aloud replaces a shown passage that does not
                            contain it (#12; default off until evaluated)
 LIVEVERSE_READING_FILL     on / off: and fills in the verse when a chapter is shown (default off)
@@ -44,6 +45,7 @@ class Settings:
     interim_repeats_whisper: int = 1
     join_chapter: bool = True
     join_runs: bool = True
+    join_tens: bool = True
     reading: bool = False
     reading_fill: bool = False
     interim_hold_s: float = 0.7
@@ -66,6 +68,7 @@ class Settings:
             interim_repeats_whisper=int(env.get("LIVEVERSE_INTERIM_REPEATS_WHISPER", 1)),
             join_chapter=_on(env.get("LIVEVERSE_JOIN_CHAPTER"), True),
             join_runs=_on(env.get("LIVEVERSE_JOIN_RUNS"), True),
+            join_tens=_on(env.get("LIVEVERSE_JOIN_TENS"), True),
             reading=_on(env.get("LIVEVERSE_READING"), False),
             reading_fill=_on(env.get("LIVEVERSE_READING_FILL"), False),
             interim_hold_s=float(env.get("LIVEVERSE_INTERIM_HOLD_S", 0.7)),

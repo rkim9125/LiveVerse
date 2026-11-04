@@ -104,7 +104,9 @@ class Session:
         self._last_book: str | None = None  # from the latest _detect()
         self._last_found: tuple[list, str | None] = ([], None)  # mentions, trailing book
         self.carry = Carry(  # references split across final segments
-            join_chapter=self.settings.join_chapter, join_runs=self.settings.join_runs
+            join_chapter=self.settings.join_chapter,
+            join_runs=self.settings.join_runs,
+            join_tens=self.settings.join_tens,
         )
         self._prev_final: list[Candidate] = []  # candidates of the last final with any
         # Wall time of the last segment of each kind from any speech source, for
@@ -349,7 +351,7 @@ class Session:
             # The previous final's last reference is part of this one.
             joined = self._prev_final[-1]
             joined.superseded, joined.dimmed, joined.pending_until = True, True, None
-        self.carry.update(*self._last_found, now)
+        self.carry.update(*self._last_found, now, text=text)
         if any(not c.guess for c in cands):
             self._prev_final = [c for c in cands if not c.guess and c.source != "quote"]
         self.recent.append((now, text))

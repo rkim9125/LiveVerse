@@ -75,7 +75,7 @@ LIMIT_QUOTES = (
 SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
 DIMMED: Counter[str] = Counter()  # chapter candidates said in passing, per file
 QUOTES: dict[str, QuoteIndex | None] = {"index": None}  # set by --quotes
-CARRY: dict[str, bool] = {"join_chapter": True, "join_runs": True}  # Carry options
+CARRY: dict[str, bool] = {"join_chapter": True, "join_runs": True, "join_tens": True}
 
 
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
@@ -133,7 +133,7 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
             if prev is not None:
                 m, a, b = prev.mentions[-1]
                 prev.mentions[-1] = (replace(m, joined_next=True), a, b)
-        carry.update(mentions, found.trailing_book, seg["start"])
+        carry.update(mentions, found.trailing_book, seg["start"], text=text)
         quoted = None
         if QUOTES["index"] is not None:
             quoted = QUOTES["index"].find(text, spoken=context, announced=context_announced)

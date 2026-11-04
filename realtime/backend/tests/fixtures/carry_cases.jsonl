@@ -11,3 +11,5 @@
 {"id": "split-run-002", "note": "next verse without a reading phrase: moving on", "segments": [[0, "요한복음 3장 16절"], [5, "17절도 보시면"]], "shown": ["jo 3:16", "jo 3:17"]}
 {"id": "split-run-003", "note": "until a later verse, no 부터", "segments": [[0, "룻기 3장 1절"], [6, "5절까지입니다"]], "shown": ["rt 3:1", "rt 3:1-5"]}
 {"id": "split-run-004", "note": "verses in a row said far apart: not a range", "segments": [[0, "룻기 2장 19절"], [12, "20절을 보시겠습니다"]], "shown": ["rt 2:19", "rt 2:20"]}
+{"id": "split-tens-001", "note": "a number split by a pause", "segments": [[0, "룻기 2장 1절"], [3, "10"], [5, "7절을 보면"]], "shown": ["rt 2:1", "rt 2:1", "rt 2:17"]}
+{"id": "split-tens-002", "note": "a lone number long before: not joined", "segments": [[0, "룻기 2장 1절"], [3, "10"], [20, "7절을 보면"]], "shown": ["rt 2:1", "rt 2:1", "rt 2:7"]}
