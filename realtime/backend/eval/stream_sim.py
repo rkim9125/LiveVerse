@@ -180,7 +180,9 @@ def replay(events: list[dict], session: Session) -> list[dict]:
         due = session.interim_due()
         if due is not None and due <= e["t"]:
             session.tick(due)
-        if e["final"]:
+        if e.get("revision"):
+            session.process_revision(e["seq"], e["text"], now=e["t"])
+        elif e["final"]:
             session.process_final(e["text"], now=e["t"], seq=e["seq"])
         else:
             session.process_interim(e["text"], now=e["t"], seq=e["seq"])

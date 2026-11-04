@@ -65,7 +65,34 @@ VARIANTS: dict[str, dict] = {
     "all": _variant(**ALL),
     "all+f": _variant(**ALL, reading=True),
     "all+f+fill": _variant(**ALL, reading=True, reading_fill=True),
+    "+g": _variant() | {"revisions": True},
+    "all+g": _variant(**ALL) | {"revisions": True},
+    "all+f+g": _variant(**ALL, reading=True) | {"revisions": True},
 }
+
+
+def with_revisions(sermon: str, events: list[dict]) -> tuple[list[dict], dict[int, str]]:
+    """Events with the revisions of revise_sim.py added at their arrival time,
+    and the revised text of each final whose revision arrived before the next
+    final (the ones the session takes)."""
+    from revise_sim import revisions_path
+
+    path = revisions_path(sermon)
+    if not path.exists():
+        raise SystemExit(f"no revisions for {sermon}; run eval/revise_sim.py first")
+    revs = json.loads(path.read_text())
+    finals = [e for e in events if e["final"]]
+    next_t = {e["seq"]: n["t"] for e, n in zip(finals, finals[1:], strict=False)}
+    added, applied = [], {}
+    for e in finals:
+        r = revs.get(str(e["seq"]))
+        if not r or not r["text"] or r["text"] == e["text"]:
+            continue
+        t = e["t"] + r["seconds"]
+        added.append(e | {"t": t, "text": r["text"], "revision": True})
+        if t < next_t.get(e["seq"], float("inf")):
+            applied[e["seq"]] = r["text"]
+    return sorted(events + added, key=lambda e: e["t"]), applied
 
 
 def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
@@ -77,6 +104,9 @@ def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     if not cache.exists():
         raise SystemExit(f"no cached decode for {sermon}: {cache.name}; run stream_sim first")
     events = json.loads(cache.read_text())
+    applied: dict[int, str] = {}
+    if variant.get("revisions"):
+        events, applied = with_revisions(sermon, events)
     s = replace(settings, interim_repeats=1, **variant.get("settings", {}))
     history = sim.replay(events, Session(store, s, quotes=quotes))
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
@@ -84,7 +114,11 @@ def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     gold = gold_mentions(labels, whisper_predictions(d / "whisper.json"))
     m = sim.measure(history, gold, 0.0, FULL_S, 0.0)
     name = "whisperstream.full-sim.json"
-    segs = [{"start": e["start"], "end": e["end"], "text": e["text"]} for e in events if e["final"]]
+    segs = [
+        {"start": e["start"], "end": e["end"], "text": applied.get(e["seq"], e["text"])}
+        for e in events
+        if e["final"] and not e.get("revision")
+    ]
     (d / name).write_text(json.dumps({"source": "full_eval", "segments": segs}, ensure_ascii=False))
     saved = dict(score.CARRY)
     score.CARRY.update(variant.get("carry", {}))
