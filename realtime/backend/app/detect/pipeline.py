@@ -32,6 +32,7 @@ class Detection:
     guesses: list[Mention] = field(default_factory=list)
     book: str | None = None
     trailing_book: str | None = None  # see ParseResult.trailing_book
+    trigger: bool = False  # a reading phrase ("말씀입니다", "보시겠습니다")
 
 
 def detect(
@@ -108,7 +109,9 @@ def analyze(
     for raw, ref, kind, conf in guessed:
         start, end = norm.original_span(raw.start, raw.end)
         guesses.append(Mention(ref, kind, norm.original[start:end], (start, end), conf))
-    return Detection(_mark_superseded(mentions), guesses, book, result.trailing_book)
+    return Detection(
+        _mark_superseded(mentions), guesses, book, result.trailing_book, result.trigger
+    )
 
 
 def _repeats_displayed_chapter(ref: Reference, displayed: Reference | None) -> bool:

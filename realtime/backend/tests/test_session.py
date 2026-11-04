@@ -315,6 +315,8 @@ def test_split_references(session, case):
         session.process_final(text, now=float(t))
         seen.append(shown(session))
     assert seen == case["shown"], case["note"]
+    listed = {alt["ref"] for alt in session.state()["alternatives"]}
+    assert not listed & set(case.get("not_listed", [])), case["note"]
 
 
 def test_interim_repeats_can_be_given_per_source(session):

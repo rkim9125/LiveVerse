@@ -209,3 +209,26 @@ def test_latency_for_a_whole_recording_with_no_duration():
     gold = [{"refs": ["jo 3:16"], "end": 10.0, "approx": False}]
     out = latency.measure(gold, run, [])
     assert (out["gold"], out["missed"]) == (1, 1)
+
+
+def test_score_drops_a_chapter_finished_in_the_next_segment(tmp_path, monkeypatch):
+    d = tmp_path / "sermon-y"
+    d.mkdir()
+    label = {
+        "id": "a",
+        "t_start": 10,
+        "t_end": 20,
+        "correct_refs": ["rt 2:7"],
+        "decision": "accept",
+    }
+    (d / "candidates.jsonl").write_text(json.dumps(label) + "\n")
+    segments = [
+        {"start": 10, "end": 12, "text": "룻기 2장을 보시겠습니다"},
+        {"start": 13, "end": 15, "text": "7절 입니다"},
+    ]
+    (d / "t.json").write_text(json.dumps({"segments": segments}))
+    monkeypatch.setenv("LIVEVERSE_CORPUS", str(tmp_path))
+    r = score.score_sermon("sermon-y", "t.json")
+    assert (r["tp"], r["fp"]) == (1, 0)
+    monkeypatch.setitem(score.CARRY, "join_chapter", False)
+    assert score.score_sermon("sermon-y", "t.json")["fp"] == 1

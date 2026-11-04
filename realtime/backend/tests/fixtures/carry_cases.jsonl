@@ -6,3 +6,8 @@
 {"id": "split-book-002", "note": "carried book too old: chapter stays with the spoken book", "segments": [[0, "요한복음 3장 16절"], [5, "오늘 본문은 룻기"], [40, "4장 1절을 보면"]], "shown": ["jo 3:16", "jo 3:16", "jo 4:1"]}
 {"id": "split-book-003", "note": "verse after a carried book: the book is not used", "segments": [[0, "요한복음 3장 16절"], [5, "룻기"], [7, "17절"]], "shown": ["jo 3:16", "jo 3:16", "jo 3:17"]}
 {"id": "split-book-004", "note": "a chapter later in the segment does not take the carried book", "segments": [[0, "요한복음 3장 16절"], [5, "룻기"], [7, "그리고 여기 4장 1절"]], "shown": ["jo 3:16", "jo 3:16", "jo 4:1"]}
+{"id": "split-chapter-001", "note": "chapter, then its verse in the next segment", "segments": [[0, "요한복음 3장 16절"], [5, "룻기 2장"], [8, "7절 입니다"]], "shown": ["jo 3:16", "jo 3:16", "rt 2:7"], "not_listed": ["rt 2"]}
+{"id": "split-run-001", "note": "verses in a row, to be read", "segments": [[0, "룻기 2장 19절"], [4, "20절을 보시겠습니다"]], "shown": ["rt 2:19", "rt 2:19-20"], "not_listed": ["rt 2:19"]}
+{"id": "split-run-002", "note": "next verse without a reading phrase: moving on", "segments": [[0, "요한복음 3장 16절"], [5, "17절도 보시면"]], "shown": ["jo 3:16", "jo 3:17"]}
+{"id": "split-run-003", "note": "until a later verse, no 부터", "segments": [[0, "룻기 3장 1절"], [6, "5절까지입니다"]], "shown": ["rt 3:1", "rt 3:1-5"]}
+{"id": "split-run-004", "note": "verses in a row said far apart: not a range", "segments": [[0, "룻기 2장 19절"], [12, "20절을 보시겠습니다"]], "shown": ["rt 2:19", "rt 2:20"]}

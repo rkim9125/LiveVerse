@@ -29,12 +29,13 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.detect.announce import TimedSegment, dimmed_chapters  # noqa: E402
-from app.detect.carry import Carry  # noqa: E402
+from app.detect.carry import Carry, announces_reading  # noqa: E402
 from app.detect.pipeline import analyze  # noqa: E402
 from app.detect.quotes import QuoteIndex  # noqa: E402
 
@@ -74,6 +75,7 @@ LIMIT_QUOTES = (
 SUPERSEDED: Counter[str] = Counter()  # chapter candidates hidden behind a verse, per file
 DIMMED: Counter[str] = Counter()  # chapter candidates said in passing, per file
 QUOTES: dict[str, QuoteIndex | None] = {"index": None}  # set by --quotes
+CARRY: dict[str, bool] = {"join_chapter": True, "join_runs": True}  # Carry options
 
 
 def predictions(transcript: Path) -> list[tuple[float, float, str]]:
@@ -97,7 +99,7 @@ def predictions(transcript: Path) -> list[tuple[float, float, str]]:
         (start, end, str(m.ref))
         for i, s in enumerate(timeline)
         for j, (m, start, end) in enumerate(s.mentions)
-        if (i, j) not in dimmed
+        if (i, j) not in dimmed and not m.joined_next
     ]
 
 
@@ -110,7 +112,7 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
     dimmed, as if the interpreter clicked each of those."""
     context = None
     context_book = None  # a book said with a chapter it does not have
-    carry = Carry()  # references split across segments
+    carry = Carry(**CARRY)  # references split across segments
     context_announced = False  # the context chapter was not dimmed
     known_books: set[str] = set()
     timeline = []
@@ -124,7 +126,13 @@ def _run(segments: list[dict], dimmed: set[tuple[int, int]]) -> list[TimedSegmen
             lead_book=carry.lead_book(seg["start"]),
             known_books=known_books,
         )
-        mentions = carry.join(found.mentions, seg["start"])
+        mentions = carry.join(found.mentions, seg["start"], announced=announces_reading(text))
+        if carry.joined_prev:
+            # The previous segment's last reference is part of this one: drop it.
+            prev = next((t for t in reversed(timeline) if t.mentions), None)
+            if prev is not None:
+                m, a, b = prev.mentions[-1]
+                prev.mentions[-1] = (replace(m, joined_next=True), a, b)
         carry.update(mentions, found.trailing_book, seg["start"])
         quoted = None
         if QUOTES["index"] is not None:
