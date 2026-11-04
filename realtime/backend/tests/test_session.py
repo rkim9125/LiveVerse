@@ -379,3 +379,29 @@ def test_reading_is_off_by_default(session):
     session.process_final("요한복음 3장 16절 말씀입니다", now=0)
     session.process_final(JOHN_3_17, now=5)
     assert shown(session) == "jo 3:16"
+
+
+# Revision (a second decoding of the last final with more audio context).
+
+
+def test_revision_replaces_the_last_final(session):
+    session.process_final("요한복음 3장 16절", now=0, seq=1)
+    session.process_final("로마서 8장 20절을 보면", now=5, seq=2)  # misheard
+    assert shown(session) == "rm 8:20"
+    assert session.process_revision(2, "로마서 8장 28절을 보면", now=6)
+    assert shown(session) == "rm 8:28" and str(session.spoken) == "rm 8:28"
+    assert session.history[-1]["reason"] == "revision"
+    assert "rm 8:20" not in {a["ref"] for a in session.state()["alternatives"]}
+
+
+def test_revision_of_an_older_final_is_ignored(session):
+    session.process_final("로마서 8장 20절", now=0, seq=1)
+    session.process_final("오늘 함께 모였습니다", now=3, seq=2)
+    assert not session.process_revision(1, "로마서 8장 28절", now=4)
+    assert shown(session) == "rm 8:20"
+
+
+def test_revision_with_the_same_reference_changes_nothing(session):
+    session.process_final("로마서 8장 28절", now=0, seq=1)
+    assert not session.process_revision(1, "로마서 8장 28절 말씀", now=1)
+    assert shown(session) == "rm 8:28"

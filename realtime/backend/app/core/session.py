@@ -28,6 +28,7 @@ dimmed after that.
 
 from __future__ import annotations
 
+import copy
 import re
 from collections import deque
 from dataclasses import dataclass, field
@@ -123,6 +124,7 @@ class Session:
         self.recent: deque[tuple[float, str]] = deque()
         self.history: list[dict] = []
         self._next_id = 0
+        self._snapshot: tuple[int | None, dict] | None = None  # state before the last final
         self.reading.reset()
 
     # ── detection ──
@@ -344,8 +346,55 @@ class Session:
 
     # ── events ──
 
+    _SNAPSHOT = (
+        "spoken",
+        "spoken_book",
+        "spoken_announced",
+        "_last_book",
+        "_last_found",
+        "carry",
+        "_prev_final",
+        "_watch",
+        "_watch_count",
+        "_watch_since",
+        "_watch_repeats",
+        "_before_interim",
+        "shown",
+        "known_books",
+        "candidates",
+        "recent",
+        "history",
+    )
+
+    def _take_snapshot(self) -> dict:
+        state = copy.deepcopy({k: getattr(self, k) for k in self._SNAPSHOT})
+        reading = getattr(self.reading, "__dict__", {})
+        state["_reading"] = {k: v for k, v in reading.items() if k in ("_current", "_t")}
+        return state
+
+    def process_revision(self, seq: int | None, text: str, now: float) -> bool:
+        """A second, better decoding of the last final segment (seq). The
+        session goes back to just before that final and takes the new text
+        instead. Ignored if another final came since. Returns True if the
+        screen changed."""
+        if self._snapshot is None or self._snapshot[0] != seq:
+            return False
+        before = self.shown.candidate.ref if self.shown else None
+        state = self._snapshot[1]
+        for k in self._SNAPSHOT:
+            setattr(self, k, state[k])
+        for k, v in state["_reading"].items():
+            setattr(self.reading, k, v)
+        self._snapshot = None
+        self.process_final(text, now=now, seq=seq)
+        after = self.shown.candidate.ref if self.shown else None
+        if after != before and self.history:
+            self.history[-1]["reason"] = "revision"
+        return after != before
+
     def process_final(self, text: str, now: float, seq: int | None = None) -> bool:
         """Handle a final transcript segment. Returns True if the state changed."""
+        self._snapshot = (seq, self._take_snapshot())
         cands = self._detect(text, seq, now)
         if self.carry.joined_prev and self._prev_final:
             # The previous final's last reference is part of this one.
