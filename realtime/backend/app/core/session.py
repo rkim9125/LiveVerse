@@ -50,6 +50,7 @@ _NAME_BEFORE_NUMBER = re.compile(
     r"(?<![가-힣\d])([가-힣]{2,6}?)(?=(?:의|에서|에|을|를|은|는|로)?\s*\d+\s*(?:장|편|:))"
 )
 RECENT_S = 30.0
+READING_REPLACE_S = 90.0  # a reading corrects a passage shown at most this long ago
 
 
 @dataclass
@@ -90,6 +91,10 @@ class Session:
     resolver: RefResolver = field(default_factory=NullResolver)
 
     def __post_init__(self) -> None:
+        if self.settings.reading and self.quotes and isinstance(self.reading, NullReadingTracker):
+            from app.reading.tracker import TextReadingTracker
+
+            self.reading = TextReadingTracker(self.quotes)
         self.reset()
 
     def reset(self) -> None:
@@ -367,7 +372,7 @@ class Session:
             self.candidates.appendleft(c)
 
         shown_ref = self.shown.candidate.ref if self.shown else None
-        self.reading.observe(text, now, self.spoken, shown_ref)
+        read = self.reading.observe(text, now, self.spoken, shown_ref)
 
         changed = bool(cands or promoted)
         pick = next((c for c in reversed(cands) if self._showable(c)), None)
@@ -377,7 +382,25 @@ class Session:
             return self._settle_interim(cands, pick, now) or changed
         if pick is not None:
             changed = self._show(pick, now, manual=False, reason="mention") or changed
+        elif read and self._reading_applies(read[-1], now):
+            event = read[-1]
+            c = Candidate(self._new_id(), event.ref, "reading", event.confidence, now, seq)
+            self.candidates.appendleft(c)
+            self.spoken, self.spoken_book, self.spoken_announced = event.ref, None, True
+            changed = self._show(c, now, manual=False, reason=f"reading-{event.outcome}") or changed
         return changed
+
+    def _reading_applies(self, event, now: float) -> bool:
+        """A verse read aloud changes the screen only to correct or complete a
+        passage that came from a recent mention, never an interpreter's choice."""
+        shown = self.shown
+        if shown is None or shown.manual or now - shown.t > READING_REPLACE_S:
+            return False
+        if shown.candidate.source not in ("rule", "context", "quote", "llm"):
+            return False  # already corrected or chosen: do not follow every verse
+        if event.outcome == "replace":
+            return True
+        return event.outcome == "fill" and self.settings.reading_fill
 
     def switch(self, candidate_id: str, now: float) -> bool:
         c = next((c for c in self.candidates if c.id == candidate_id), None)

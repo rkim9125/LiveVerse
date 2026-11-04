@@ -9,6 +9,9 @@ LIVEVERSE_INTERIM_REPEATS  consecutive interim results with the same verse to sh
 LIVEVERSE_INTERIM_HOLD_S   or seconds the same verse stays in the interim result (default 0.7)
 LIVEVERSE_JOIN_CHAPTER     on / off: "룻기 2장" / "7절" in two segments are one reference (on)
 LIVEVERSE_JOIN_RUNS        on / off: "19절" / "20절" in two segments are a range (default on)
+LIVEVERSE_READING          on / off: a verse read aloud replaces a shown passage that does not
+                           contain it (#12; default off until evaluated)
+LIVEVERSE_READING_FILL     on / off: and fills in the verse when a chapter is shown (default off)
 LIVEVERSE_INTERIM_REPEATS_WHISPER  the same for segments from the Whisper worker (default 1;
                            its interims are decoded from whole audio and change less)
 LIVEVERSE_LOG_DIR          where latency logs go (default realtime/backend/logs)
@@ -41,6 +44,8 @@ class Settings:
     interim_repeats_whisper: int = 1
     join_chapter: bool = True
     join_runs: bool = True
+    reading: bool = False
+    reading_fill: bool = False
     interim_hold_s: float = 0.7
     log_dir: Path = BACKEND / "logs"
     allow_remote: bool = False
@@ -61,6 +66,8 @@ class Settings:
             interim_repeats_whisper=int(env.get("LIVEVERSE_INTERIM_REPEATS_WHISPER", 1)),
             join_chapter=_on(env.get("LIVEVERSE_JOIN_CHAPTER"), True),
             join_runs=_on(env.get("LIVEVERSE_JOIN_RUNS"), True),
+            reading=_on(env.get("LIVEVERSE_READING"), False),
+            reading_fill=_on(env.get("LIVEVERSE_READING_FILL"), False),
             interim_hold_s=float(env.get("LIVEVERSE_INTERIM_HOLD_S", 0.7)),
             log_dir=Path(env.get("LIVEVERSE_LOG_DIR", BACKEND / "logs")).expanduser(),
             allow_remote=_on(env.get("LIVEVERSE_ALLOW_REMOTE"), False),

@@ -322,3 +322,60 @@ def test_split_references(session, case):
 def test_interim_repeats_can_be_given_per_source(session):
     assert session.process_interim("요한복음 3장 16절", now=0.0, repeats=1)
     assert shown(session) == "jo 3:16" and session.shown.interim
+
+
+# Reading confirmation (#12), with the KJV sample.
+
+JOHN_3_17 = (
+    "For God sent not his Son into the world to condemn the world; "
+    "but that the world through him might be saved."
+)
+JOHN_3_16 = (
+    "For God so loved the world, that he gave his only begotten Son, "
+    "that whosoever believeth in him should not perish"
+)
+
+
+@pytest.fixture
+def reading_session(settings, store):
+    from app.core import bible_text
+
+    quotes = QuoteIndex(bible_text.load(bible_text.SAMPLE))
+    return Session(store, replace(settings, reading=True), quotes=quotes)
+
+
+def test_reading_a_different_verse_replaces_the_shown_one(reading_session):
+    s = reading_session
+    s.process_final("요한복음 3장 16절 말씀입니다", now=0)
+    assert s.process_final(JOHN_3_17, now=5)
+    assert (shown(s), source(s)) == ("jo 3:17", "reading")
+    assert str(s.spoken) == "jo 3:17"
+
+
+def test_reading_the_shown_verse_confirms_it(reading_session):
+    s = reading_session
+    s.process_final("요한복음 3장 16절 말씀입니다", now=0)
+    s.process_final(JOHN_3_16, now=5)
+    assert (shown(s), source(s)) == ("jo 3:16", "rule")
+    assert s.state()["reading"]["outcome"] == "confirm"
+
+
+def test_reading_does_not_override_the_interpreter(reading_session):
+    s = reading_session
+    s.search("요 3:16", now=0)
+    s.process_final(JOHN_3_17, now=5)
+    assert shown(s) == "jo 3:16"
+
+
+def test_reading_corrects_only_once(reading_session):
+    s = reading_session
+    s.process_final("요한복음 3장 16절 말씀입니다", now=0)
+    s.process_final(JOHN_3_17, now=5)
+    s.process_final("And this is the condemnation, that light is come into the world", now=10)
+    assert shown(s) == "jo 3:17"  # no following verse by verse
+
+
+def test_reading_is_off_by_default(session):
+    session.process_final("요한복음 3장 16절 말씀입니다", now=0)
+    session.process_final(JOHN_3_17, now=5)
+    assert shown(session) == "jo 3:16"
