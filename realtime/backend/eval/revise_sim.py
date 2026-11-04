@@ -47,17 +47,30 @@ def reference_like(text: str) -> bool:
 
 def revisions_path(sermon: str) -> Path:
     return (
-        sim.corpus_dir() / "reports" / "sim-events" / f"{sermon}-revisions-ctx{CONTEXT_S:.0f}.json"
+        sim.corpus_dir()
+        / "reports"
+        / "sim-events"
+        / f"{sermon}-revisions-v2-ctx{CONTEXT_S:.0f}.json"
     )
 
 
-def revise(decoder: MlxDecoder, audio: np.ndarray, start: float, end: float) -> tuple[str, float]:
+def utterance_words(words: list, start_in_piece: float) -> str:
+    """The words of the utterance itself: those that end after it starts.
+    Whisper's word starts drift early, so a start cut drops the first word,
+    usually the book name ("룻기 2장" came back as "2장")."""
+    return "".join(w for _, b, w in words if b > start_in_piece + 0.1).strip()
+
+
+def revise(decoder: MlxDecoder, audio: np.ndarray, start: float, end: float) -> dict:
     begin = max(0.0, start - CONTEXT_S)
     piece = audio[int(begin * SR) : int(end * SR)]
     d = decoder.decode(piece, words=True)
-    offset = start - begin - 0.15
-    text = "".join(w for a, _, w in d.words if a >= offset).strip()
-    return text, d.seconds
+    return {
+        "text": utterance_words(d.words, start - begin),
+        "seconds": round(d.seconds, 3),
+        "start_in_piece": round(start - begin, 3),
+        "words": [[round(a, 2), round(b, 2), w] for a, b, w in d.words],
+    }
 
 
 def main() -> None:
@@ -84,8 +97,7 @@ def main() -> None:
         print(f"{sermon}: {len(todo)} finals to revise ({len(done)} done)", flush=True)
         t = time.time()
         for i, e in enumerate(todo, 1):
-            text, seconds = revise(decoder, audio, e["start"], e["end"])
-            done[str(e["seq"])] = {"text": text, "seconds": round(seconds, 3), "t_final": e["t"]}
+            done[str(e["seq"])] = revise(decoder, audio, e["start"], e["end"]) | {"t_final": e["t"]}
             if i % 20 == 0 or i == len(todo):
                 out_path.write_text(json.dumps(done, ensure_ascii=False))
         print(
