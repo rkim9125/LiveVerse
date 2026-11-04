@@ -53,7 +53,7 @@ def _variant(**on) -> dict:
     return {"settings": carry | reading, "carry": carry, "verse_as_je": flags["verse_as_je"]}
 
 
-ALL = {"join_chapter": True, "join_runs": True, "join_tens": True, "verse_as_je": True}
+ALL = {"join_chapter": True, "join_runs": True, "join_tens": True}  # the defaults (a is off)
 VARIANTS: dict[str, dict] = {
     "base": _variant(),
     "+h": _variant(join_chapter=True),
