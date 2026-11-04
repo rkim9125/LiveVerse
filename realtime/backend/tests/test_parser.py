@@ -50,3 +50,14 @@ def test_offsets_map_back_to_original():
     end = norm.text.index("16") + 2
     assert norm.original_text(start, end) == "John three sixteen"
     assert norm.original_span(3, 3) == (3, 3)
+
+
+def test_verse_heard_as_je_when_switched_on(monkeypatch):
+    from app.detect import normalize as norm_module
+
+    monkeypatch.setattr(norm_module, "VERSE_AS_JE", True)
+    assert [str(m.ref) for m in analyze("룻기 2장 7제를 봐보겠습니다").mentions] == ["rt 2:7"]
+    assert [str(m.ref) for m in analyze("이것이 룻기 3장 제목입니다").mentions] == ["rt 3"]
+    # Off (the default), the parser still reads "2장 7" as chapter and verse.
+    monkeypatch.setattr(norm_module, "VERSE_AS_JE", False)
+    assert [str(m.ref) for m in analyze("룻기 2장 7제를 봐보겠습니다").mentions] == ["rt 2:7"]
