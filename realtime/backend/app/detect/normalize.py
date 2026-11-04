@@ -19,6 +19,9 @@ _KO_ORDINAL_RE = re.compile(r"첫\s*(?:째|번째)?\s*(?=장|절)")
 # Speech recognition often hears 시편 as 십편 / "10편": "10편 139편" is Psalm 139.
 _PSALM_MISHEARD_RE = re.compile(r"(?<![\d가-힣])10\s*편(?=\s*\d+\s*편)")
 _PSALM_ALONE_RE = re.compile(r"(?<![\d가-힣])10\s*편(?!\s*\d)")
+# Speech recognition sometimes hears 절 as 제 right after a chapter: "2장 7제를".
+VERSE_AS_JE = True  # evaluation switch for the rule below
+_VERSE_AS_JE_RE = re.compile(r"\d장\s*\d+\s*제(?=[를는에가도은의]|\s|입니다|부터|까지|$)")
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,9 @@ def normalize(text: str) -> Normalized:
     norm = _replace(norm, find_korean_numbers(norm.text))
     norm = _replace(norm, find_english_numbers(norm.text))
     norm = _replace(norm, _psalm_fixes(norm.text))
+    norm = _replace(
+        norm, [(m.end() - 1, m.end(), "절") for m in _VERSE_AS_JE_RE.finditer(norm.text)]
+    )
     return norm
 
 

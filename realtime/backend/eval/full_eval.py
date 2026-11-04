@@ -55,11 +55,17 @@ VARIANTS: dict[str, dict] = {
         "settings": {"join_chapter": False, "join_runs": True},
         "carry": {"join_chapter": False, "join_runs": True},
     },
-    "joins": {"settings": {}, "carry": {}},  # current defaults
+    "joins": {"settings": {}, "carry": {}},  # h and d, the current defaults
+    "joins+f": {"settings": {"reading": True}, "carry": {}},
+    "joins+f+fill": {"settings": {"reading": True, "reading_fill": True}, "carry": {}},
+    "joins-a": {"settings": {}, "carry": {}, "verse_as_je": False},  # without "7제" -> 7절
 }
 
 
 def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
+    from app.detect import normalize
+
+    normalize.VERSE_AS_JE = variant.get("verse_as_je", True)
     d = sim.corpus_dir() / sermon
     cache = sim.events_cache(sermon, 0.0, FULL_S, 0.0, sim.CONFIGS["repeat1"])
     if not cache.exists():

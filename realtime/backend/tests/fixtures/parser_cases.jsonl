@@ -164,3 +164,5 @@
 {"id": "ko-num-023", "lang": "ko", "mode": "spoken", "input": "이장님이 오셨습니다", "context": null, "expect": [], "tags": ["numerals", "negative"]}
 {"id": "ko-num-024", "lang": "ko", "mode": "spoken", "input": "사장님 일장 연설", "context": null, "expect": [], "tags": ["numerals", "negative"]}
 {"id": "ko-num-025", "lang": "ko", "mode": "spoken", "input": "이 장에서 보면", "context": null, "expect": [], "tags": ["numerals", "negative"]}
+{"id": "ko-je-001", "lang": "ko", "mode": "spoken", "input": "룻기 2장 7제를 봐보겠습니다", "context": null, "expect": [{"ref": "rt 2:7"}], "tags": ["misheard", "je"]}
+{"id": "ko-je-002", "lang": "ko", "mode": "spoken", "input": "이것이 룻기 3장 제목입니다", "context": null, "expect": [{"ref": "rt 3"}], "tags": ["misheard", "je", "negative"]}
