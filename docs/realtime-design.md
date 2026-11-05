@@ -161,9 +161,12 @@ class SpeechSource(Protocol):
 
 - **Spoken position:** the last reference the preacher said, including chapters said in passing. Relative mentions ("2절", "다음 절") are resolved against it.
 - **Book only:** after a book said with an out of range chapter, the spoken position is that book with no chapter. A later "3장" resolves to that book's chapter 3. Verse level mentions ("2절", "다음 절") have no chapter to attach to and produce nothing until a chapter is said.
-- **Across segments:** preachers pause while finding a passage, and each pause ends a segment. Two pieces are carried for 15 s (`app/detect/carry.py`):
+- **Across segments:** preachers pause while finding a passage, and each pause ends a segment, so streaming speech recognition splits references that a 30 s window would read whole. `app/detect/carry.py` joins the pieces within 15 s:
   - a segment ending on a bare book name ("오늘 본문은 룻기") lends the book to a chapter at the start of the next segment ("2장 1절")
-  - "N절부터" at the end of one segment and "M절까지" of the same chapter at the start of the next make one range N-M
+  - a chapter at the end of one segment and a verse of it at the start of the next ("룻기 2장" / "7절 입니다") are one reference; the chapter is then not listed or counted on its own (`LIVEVERSE_JOIN_CHAPTER`)
+  - "N절부터" and "M절까지" make one range N-M; so do verses in a row when the second announces reading ("19절" / "20절을 보시겠습니다", within 8 s), or ends with 까지 (`LIVEVERSE_JOIN_RUNS`)
+  - a segment that is only a multiple of ten and a one digit verse right after it ("10" / "7절") are one number (`LIVEVERSE_JOIN_TENS`)
+  - On the whole dev sermons, with the streaming decodes, these raised F1 from 0.82 to 0.85 and from 0.59 to 0.69.
 - **Shown passage:** what is on the interpreter's screen now. It is used to hide a chapter said again while one of its verses is shown, and to allow looser near-match names.
 - Evaluation showed that resolving relative mentions only against the shown passage loses the preacher's position. For example, "이제 2장에 보면" moves the preacher back to chapter 2 even though it is not worth showing.
 
@@ -279,7 +282,7 @@ class RefResolver(Protocol):
 As built in stage 4 (`realtime/frontend/screen`, served at `/ui/screen/` and `/`):
 
 - The shown passage is large, with 개역한글 and NKJV side by side, one row per verse. The interpreter reads both, so they get the same size; the column of a translation that is missing is folded away. On a narrow screen the English goes under the Korean.
-- The verse being read is highlighted (#13; the reading tracker comes in stage 5).
+- The verse being read is highlighted (#13). A reading tracker for #12 exists (`app/reading/tracker.py`, `LIVEVERSE_READING`): a verse read aloud replaces a recently shown passage that does not contain it. It is off: on the dev sermons it changed no reference and added one or two wrong screen changes.
 - Marks show the source (said, context, quote, guess, manual) and the confidence. A passage shown from interim results is italic, underlined with dashes and marked interim until its final arrives. Tentative (LLM) passages have a dashed mark.
 - Up to three alternatives are listed at the side, on keys 1 to 3. Guesses and chapters said in passing are faint.
 - The spoken position is shown at the side, including a book whose chapter is unknown.
