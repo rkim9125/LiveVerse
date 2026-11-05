@@ -37,6 +37,7 @@ from stt_latency import gold_mentions, whisper_predictions  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.core.session import Session  # noqa: E402
 from app.core.store import BibleStore  # noqa: E402
+from app.detect.pipeline import detect  # noqa: E402
 from app.main import _quote_index  # noqa: E402
 
 FULL_S = 4200.0  # longer than either dev sermon
@@ -68,10 +69,14 @@ VARIANTS: dict[str, dict] = {
     "+g": _variant() | {"revisions": True},
     "all+g": _variant(**ALL) | {"revisions": True},
     "all+f+g": _variant(**ALL, reading=True) | {"revisions": True},
+    # Only revisions that find a reference the first decoding did not.
+    "all+g-add": _variant(**ALL) | {"revisions": "add"},
 }
 
 
-def with_revisions(sermon: str, events: list[dict]) -> tuple[list[dict], dict[int, str]]:
+def with_revisions(
+    sermon: str, events: list[dict], only_new: bool = False
+) -> tuple[list[dict], dict[int, str]]:
     """Events with the revisions of revise_sim.py added at their arrival time,
     and the revised text of each final whose revision arrived before the next
     final (the ones the session takes)."""
@@ -88,6 +93,11 @@ def with_revisions(sermon: str, events: list[dict]) -> tuple[list[dict], dict[in
         r = revs.get(str(e["seq"]))
         if not r or not r["text"] or r["text"] == e["text"]:
             continue
+        if only_new:
+            before = {str(m.ref) for m in detect(e["text"])}
+            after = {str(m.ref) for m in detect(r["text"])}
+            if not after or after <= before:
+                continue  # it would only take references away
         t = e["t"] + r["seconds"]
         added.append(e | {"t": t, "text": r["text"], "revision": True})
         if t < next_t.get(e["seq"], float("inf")):
@@ -106,7 +116,7 @@ def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     events = json.loads(cache.read_text())
     applied: dict[int, str] = {}
     if variant.get("revisions"):
-        events, applied = with_revisions(sermon, events)
+        events, applied = with_revisions(sermon, events, only_new=variant["revisions"] == "add")
     s = replace(settings, interim_repeats=1, **variant.get("settings", {}))
     history = sim.replay(events, Session(store, s, quotes=quotes))
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
