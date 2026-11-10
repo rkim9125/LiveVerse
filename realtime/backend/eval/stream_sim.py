@@ -280,6 +280,11 @@ def main() -> None:
     p.add_argument("--windows", nargs="+", default=["sermon-01:180", "sermon-02:3300"])
     p.add_argument("--duration", type=float, default=600.0)
     p.add_argument(
+        "--allow-test",
+        action="store_true",
+        help="allow test sermons (only after a freeze; prints numbers, never text)",
+    )
+    p.add_argument(
         "--pre",
         type=float,
         default=120.0,
@@ -303,7 +308,7 @@ def main() -> None:
         clip = float(clip)
         d = corpus_dir() / sermon
         meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
-        if meta.get("split") != "dev":
+        if meta.get("split") != "dev" and not args.allow_test:
             raise SystemExit(f"{sermon} is not a dev sermon")
         audio = np.array(load_audio(str(d / "audio.wav")), dtype=np.float32)
         pre = min(args.pre, clip)

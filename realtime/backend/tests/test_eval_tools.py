@@ -232,3 +232,18 @@ def test_score_drops_a_chapter_finished_in_the_next_segment(tmp_path, monkeypatc
     assert (r["tp"], r["fp"]) == (1, 0)
     monkeypatch.setitem(score.CARRY, "join_chapter", False)
     assert score.score_sermon("sermon-y", "t.json")["fp"] == 1
+
+
+def test_add_recordings_numbers_folders_and_finds_existing(tmp_path, monkeypatch):
+    add = load("add_recordings")
+    monkeypatch.setenv("LIVEVERSE_CORPUS", str(tmp_path))
+    assert add.next_folder().name == "sermon-01"
+    (tmp_path / "sermon-07").mkdir()
+    rec = tmp_path / "sermon-07" / "a.mp3"
+    rec.write_bytes(b"x" * 10)
+    assert add.next_folder().name == "sermon-08"
+    other = tmp_path / "a.mp3"
+    other.write_bytes(b"x" * 10)
+    assert add.existing_folder(other).name == "sermon-07"
+    other.write_bytes(b"x" * 11)
+    assert add.existing_folder(other) is None

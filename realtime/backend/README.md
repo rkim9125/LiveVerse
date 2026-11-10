@@ -80,6 +80,16 @@ uv sync
 uv run python eval/score.py sermon-01 sermon-02 --transcript whisper.prompted.json --name repro --quotes
 ```
 
+## Adding recordings
+
+`eval/add_recordings.py` adds new sermon recordings to the corpus in one go: a new `sermon-NN` folder with `meta.json`, the two Whisper transcripts, and the review candidates (blind ones for a test recording). With `--stream` it also builds the streaming decode cache that `eval/full_eval.py` replays. Steps whose output exists are skipped, so a stopped run can be started again. It prints counts and file names, never transcript text.
+
+```sh
+uv run python eval/add_recordings.py --split dev ~/Downloads/20261116.mp3 --stream
+uv run python eval/add_recordings.py --split test a.mp3 b.mp3
+uv run python eval/review_labels.py sermon-06        # then a person labels the candidates
+```
+
 ## Using the detector directly
 
 ```python
