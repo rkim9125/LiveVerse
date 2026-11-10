@@ -105,12 +105,12 @@ def with_revisions(
     return sorted(events + added, key=lambda e: e["t"]), applied
 
 
-def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
+def evaluate(sermon: str, variant: dict, store, quotes, settings, full_s: float = FULL_S) -> dict:
     from app.detect import normalize
 
     normalize.VERSE_AS_JE = variant["verse_as_je"]
     d = sim.corpus_dir() / sermon
-    cache = sim.events_cache(sermon, 0.0, FULL_S, 0.0, sim.CONFIGS["repeat1"])
+    cache = sim.events_cache(sermon, 0.0, full_s, 0.0, sim.CONFIGS["repeat1"])
     if not cache.exists():
         raise SystemExit(f"no cached decode for {sermon}: {cache.name}; run stream_sim first")
     events = json.loads(cache.read_text())
@@ -127,7 +127,7 @@ def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
     labels = [c for c in labels if c.get("decision") in ("accept", "fix")]
     gold = gold_mentions(labels, whisper_predictions(d / "whisper.json"))
-    m = sim.measure(history, gold, 0.0, FULL_S, 0.0)
+    m = sim.measure(history, gold, 0.0, full_s, 0.0)
     name = "whisperstream.full-sim.json"
     segs = [
         {"start": e["start"], "end": e["end"], "text": applied.get(e["seq"], e["text"])}
@@ -165,6 +165,10 @@ def main() -> None:
     )
     p.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=sorted(VARIANTS))
     p.add_argument("--sermons", nargs="+", default=["sermon-01", "sermon-02"])
+    p.add_argument(
+        "--duration", type=float, default=FULL_S, help="the length the cache was built with"
+    )
+    p.add_argument("--out", default="full-eval-latest.json", help="report file in corpus/reports")
     args = p.parse_args()
     settings = Settings.from_env()
     store = BibleStore.load(settings.bible_text_path)
@@ -176,7 +180,7 @@ def main() -> None:
             r = {
                 "variant": v,
                 "sermon": sermon,
-                **evaluate(sermon, VARIANTS[v], store, quotes, settings),
+                **evaluate(sermon, VARIANTS[v], store, quotes, settings, args.duration),
             }
             rows.append(r)
             print(
@@ -186,7 +190,7 @@ def main() -> None:
                 f"wrong {r['wrong']}/{r['changes']} reverts {r['reverts']}",
                 flush=True,
             )
-    out = sim.corpus_dir() / "reports" / "full-eval-latest.json"
+    out = sim.corpus_dir() / "reports" / args.out
     out.write_text(json.dumps(rows, indent=1))
 
 
