@@ -405,3 +405,23 @@ def test_revision_with_the_same_reference_changes_nothing(session):
     session.process_final("로마서 8장 28절", now=0, seq=1)
     assert not session.process_revision(1, "로마서 8장 28절 말씀", now=1)
     assert shown(session) == "rm 8:28"
+
+
+def test_keep_shown_does_not_let_a_revision_take_the_passage_away(session):
+    session.process_final("요한복음 3장 16절", now=0, seq=1)
+    session.process_final("로마서 8장 28절", now=5, seq=2)
+    assert not session.process_revision(2, "오늘 함께 모였습니다", now=6)
+    assert shown(session) == "rm 8:28" and 2 not in session.revisions_applied
+
+
+def test_revision_policy_any_takes_it(session):
+    session.process_final("요한복음 3장 16절", now=0, seq=1)
+    session.process_final("로마서 8장 28절", now=5, seq=2)
+    assert session.process_revision(2, "오늘 함께 모였습니다", now=6, policy="any")
+    assert shown(session) == "jo 3:16"
+
+
+def test_no_screen_change_policy_keeps_the_screen(session):
+    session.process_final("로마서 8장 20절", now=0, seq=1)
+    assert not session.process_revision(1, "로마서 8장 28절", now=1, policy="no_screen_change")
+    assert shown(session) == "rm 8:20"

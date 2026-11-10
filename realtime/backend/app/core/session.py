@@ -125,6 +125,7 @@ class Session:
         self.history: list[dict] = []
         self._next_id = 0
         self._snapshot: tuple[int | None, dict] | None = None  # state before the last final
+        self.revisions_applied: set[int | None] = set()
         self.reading.reset()
 
     # ── detection ──
@@ -372,22 +373,45 @@ class Session:
         state["_reading"] = {k: v for k, v in reading.items() if k in ("_current", "_t")}
         return state
 
-    def process_revision(self, seq: int | None, text: str, now: float) -> bool:
-        """A second, better decoding of the last final segment (seq). The
-        session goes back to just before that final and takes the new text
-        instead. Ignored if another final came since. Returns True if the
-        screen changed."""
-        if self._snapshot is None or self._snapshot[0] != seq:
-            return False
-        before = self.shown.candidate.ref if self.shown else None
-        state = self._snapshot[1]
+    def _restore(self, state: dict) -> None:
         for k in self._SNAPSHOT:
             setattr(self, k, state[k])
         for k, v in state["_reading"].items():
             setattr(self.reading, k, v)
+
+    def process_revision(
+        self, seq: int | None, text: str, now: float, policy: str | None = None
+    ) -> bool:
+        """A second, better decoding of the last final segment (seq). The
+        session goes back to just before that final and takes the new text
+        instead. Ignored if another final came since. Returns True if the
+        screen changed.
+
+        policy (default settings.revision_policy):
+          any               take every revision
+          keep_shown        not one that would take the passage on screen away
+                            without a reference of its own in its place
+          no_screen_change  only ones that leave the screen as it is
+        """
+        if self._snapshot is None or self._snapshot[0] != seq:
+            return False
+        policy = policy or self.settings.revision_policy
+        shown_before = self.shown
+        before = shown_before.candidate.ref if shown_before else None
+        now_state = self._take_snapshot()
+        first_new_id = self._next_id + 1
+        self._restore(self._snapshot[1])
         self._snapshot = None
         self.process_final(text, now=now, seq=seq)
         after = self.shown.candidate.ref if self.shown else None
+        from_revision = self.shown is not None and int(self.shown.candidate.id[1:]) >= first_new_id
+        erased = shown_before is not None and after != before and not from_revision
+        if (policy == "keep_shown" and erased) or (
+            policy == "no_screen_change" and after != before
+        ):
+            self._restore(now_state)
+            return False
+        self.revisions_applied.add(seq)
         if after != before and self.history:
             self.history[-1]["reason"] = "revision"
         return after != before

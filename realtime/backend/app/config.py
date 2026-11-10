@@ -47,6 +47,7 @@ class Settings:
     join_runs: bool = True
     join_tens: bool = True
     reading: bool = False
+    revision_policy: str = "keep_shown"
     reading_fill: bool = False
     interim_hold_s: float = 0.7
     log_dir: Path = BACKEND / "logs"

@@ -66,9 +66,12 @@ VARIANTS: dict[str, dict] = {
     "all": _variant(**ALL),
     "all+f": _variant(**ALL, reading=True),
     "all+f+fill": _variant(**ALL, reading=True, reading_fill=True),
-    "+g": _variant() | {"revisions": True},
-    "all+g": _variant(**ALL) | {"revisions": True},
-    "all+f+g": _variant(**ALL, reading=True) | {"revisions": True},
+    "+g": _variant() | {"revisions": "any"},
+    "all+g": _variant(**ALL) | {"revisions": "any"},
+    # Not a revision that takes the passage on screen away (4th round).
+    "all+g-keep": _variant(**ALL) | {"revisions": "keep_shown"},
+    # Revisions change candidates and the spoken position only.
+    "all+g-fixed": _variant(**ALL) | {"revisions": "no_screen_change"},
     # Only revisions that find a reference the first decoding did not.
     "all+g-add": _variant(**ALL) | {"revisions": "add"},
 }
@@ -78,8 +81,7 @@ def with_revisions(
     sermon: str, events: list[dict], only_new: bool = False
 ) -> tuple[list[dict], dict[int, str]]:
     """Events with the revisions of revise_sim.py added at their arrival time,
-    and the revised text of each final whose revision arrived before the next
-    final (the ones the session takes)."""
+    and the revised text of each final (the session decides which it takes)."""
     from revise_sim import revisions_path
 
     path = revisions_path(sermon)
@@ -87,7 +89,6 @@ def with_revisions(
         raise SystemExit(f"no revisions for {sermon}; run eval/revise_sim.py first")
     revs = json.loads(path.read_text())
     finals = [e for e in events if e["final"]]
-    next_t = {e["seq"]: n["t"] for e, n in zip(finals, finals[1:], strict=False)}
     added, applied = [], {}
     for e in finals:
         r = revs.get(str(e["seq"]))
@@ -100,8 +101,7 @@ def with_revisions(
                 continue  # it would only take references away
         t = e["t"] + r["seconds"]
         added.append(e | {"t": t, "text": r["text"], "revision": True})
-        if t < next_t.get(e["seq"], float("inf")):
-            applied[e["seq"]] = r["text"]
+        applied[e["seq"]] = r["text"]
     return sorted(events + added, key=lambda e: e["t"]), applied
 
 
@@ -114,11 +114,16 @@ def evaluate(sermon: str, variant: dict, store, quotes, settings) -> dict:
     if not cache.exists():
         raise SystemExit(f"no cached decode for {sermon}: {cache.name}; run stream_sim first")
     events = json.loads(cache.read_text())
-    applied: dict[int, str] = {}
-    if variant.get("revisions"):
-        events, applied = with_revisions(sermon, events, only_new=variant["revisions"] == "add")
+    revised: dict[int, str] = {}
+    policy = variant.get("revisions")
+    if policy:
+        events, revised = with_revisions(sermon, events, only_new=policy == "add")
     s = replace(settings, interim_repeats=1, **variant.get("settings", {}))
-    history = sim.replay(events, Session(store, s, quotes=quotes))
+    if policy:
+        s = replace(s, revision_policy="any" if policy == "add" else policy)
+    session = Session(store, s, quotes=quotes)
+    history = sim.replay(events, session)
+    applied = {seq: t for seq, t in revised.items() if seq in session.revisions_applied}
     labels = [json.loads(line) for line in (d / "candidates.jsonl").open(encoding="utf-8")]
     labels = [c for c in labels if c.get("decision") in ("accept", "fix")]
     gold = gold_mentions(labels, whisper_predictions(d / "whisper.json"))
